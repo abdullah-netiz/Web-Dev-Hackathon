@@ -5,6 +5,7 @@ import { Job, UnrecoverableError } from 'bullmq';
 import { AlertsService, type AlertJob } from '../alerts/alerts.service';
 import { JOB_NAMES, QUEUES } from '../jobs/queues';
 import { MessagingService } from '../messaging/messaging.service';
+import { PaymentsService } from '../payments/payments.service';
 import { ProviderError } from './providers/twilio.provider';
 
 /**
@@ -35,8 +36,8 @@ export class OutboundProcessor extends WorkerHost {
   }
 }
 
-/** Telegram alerts: ~30 msg/s is the bot-wide limit; 25/s keeps a margin. Three attempts with backoff (I4.4). */
-@Processor(QUEUES.alerts, { concurrency: 5, limiter: { max: 25, duration: 1000 } })
+/** Slack alerts: chat.postMessage allows about 1 message per second per channel; 5/s overall keeps a margin. Three attempts (I4.4). */
+@Processor(QUEUES.alerts, { concurrency: 5, limiter: { max: 5, duration: 1000 } })
 export class AlertsProcessor extends WorkerHost {
   private readonly logger = new Logger(AlertsProcessor.name);
 
@@ -57,5 +58,17 @@ export class AlertsProcessor extends WorkerHost {
       }
       throw error;
     }
+  }
+}
+
+/** I2.5: marks unpaid payment requests past their deadline as EXPIRED every 30 s. */
+@Processor(QUEUES.payments, { concurrency: 1 })
+export class PaymentsProcessor extends WorkerHost {
+  constructor(private readonly payments: PaymentsService) {
+    super();
+  }
+
+  async process(job: Job) {
+    return job.name === JOB_NAMES.expirePayments ? this.payments.expireOverdue() : null;
   }
 }

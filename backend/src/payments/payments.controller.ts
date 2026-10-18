@@ -29,7 +29,7 @@ const ListDto = zodDto(
 export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
-  /** I2.1: creates a Stripe Checkout session; the returned `checkoutUrl` can be sent to the customer. */
+  /** I2.1: creates a Lemon Squeezy checkout; the returned `checkoutUrl` can be sent to the customer. */
   @Post('opportunities/:id/payment-requests')
   @RequirePermission('crm.edit')
   async request(@CurrentUser() auth: AuthContext, @Param('id') id: string, @Body() body: InstanceType<typeof RequestDto>) {

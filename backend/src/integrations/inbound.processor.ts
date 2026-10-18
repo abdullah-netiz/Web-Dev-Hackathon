@@ -2,7 +2,6 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job, UnrecoverableError } from 'bullmq';
 
-import { AlertsService } from '../alerts/alerts.service';
 import { QUEUES } from '../jobs/queues';
 import { MessagingService } from '../messaging/messaging.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -18,7 +17,6 @@ export class InboundProcessor extends WorkerHost {
     private readonly events: IntegrationEventsService,
     private readonly messaging: MessagingService,
     private readonly payments: PaymentsService,
-    private readonly alerts: AlertsService,
   ) {
     super();
   }
@@ -34,11 +32,8 @@ export class InboundProcessor extends WorkerHost {
         case 'twilio.status':
           related = await this.messaging.handleStatus(data.workspaceId, data.params);
           break;
-        case 'stripe.event':
+        case 'lemonsqueezy.event':
           related = await this.payments.handleEvent(data.workspaceId, data.event);
-          break;
-        case 'telegram.update':
-          related = await this.alerts.handleTelegramUpdate(data.update);
           break;
       }
       await this.events.markProcessed(data.eventId, related);

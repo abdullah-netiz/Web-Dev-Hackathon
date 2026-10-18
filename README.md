@@ -3,7 +3,7 @@
 One connected platform for small service companies: a customizable CRM, a lead engine that guarantees every
 incoming lead has exactly one accountable owner (round-robin assignment, acknowledgement windows, automatic
 escalation, recovery queue), an append-only audit history, a live dashboard, and real sandbox integrations
-with Twilio WhatsApp, Stripe, Google Calendar and Telegram.
+with Twilio WhatsApp, Lemon Squeezy payments, Google Calendar and Slack. Every service used works from Pakistan.
 
 | Where | What |
 |---|---|

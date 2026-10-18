@@ -1,8 +1,9 @@
 export const QUEUES = {
   escalation: 'escalation', // delayed job per acknowledgement window
-  integrations: 'integrations', // outbound provider calls (Twilio, Stripe, Google)
-  alerts: 'alerts', // Telegram escalation alerts
-  inbound: 'inbound', // verified inbound webhooks (Twilio, Stripe, Telegram, Twenty) processed off the request path
+  integrations: 'integrations', // outbound provider calls (Twilio, Lemon Squeezy, Google)
+  alerts: 'alerts', // Slack escalation alerts
+  inbound: 'inbound', // verified inbound webhooks (Twilio, Lemon Squeezy) processed off the request path
+  payments: 'payments', // payment expiry sweep
   housekeeping: 'housekeeping', // recovery sweep, metrics, reconciliation
 } as const;
 
@@ -13,6 +14,7 @@ export const JOB_NAMES = {
   processInbound: 'process-inbound',
   recoverySweep: 'recovery-sweep',
   reconcile: 'reconcile',
+  expirePayments: 'expire-payments',
 } as const;
 
 /** BullMQ job ids must not contain ':' (docs.bullmq.io/guide/jobs/job-ids). */

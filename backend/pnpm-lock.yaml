@@ -71,9 +71,6 @@ importers:
       socket.io:
         specifier: ^4.8.4
         version: 4.8.4
-      stripe:
-        specifier: ^18.5.0
-        version: 18.5.0(@types/node@24.19.2)
       twilio:
         specifier: ^5.9.0
         version: 5.13.1
@@ -2335,15 +2332,6 @@ packages:
 
   strip-literal@3.1.0:
     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
-
-  stripe@18.5.0:
-    resolution: {integrity: sha512-Hp+wFiEQtCB0LlNgcFh5uVyKznpDjzyUZ+CNVEf+I3fhlYvh7rZruIg+jOwzJRCpy0ZTPMjlzm7J2/M2N6d+DA==}
-    engines: {node: '>=12.*'}
-    peerDependencies:
-      '@types/node': '>=12.x.x'
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
 
   strtok3@10.6.1:
     resolution: {integrity: sha512-p8ynRS8lXnvA3tsdcUYFjbzwh2MsdBZgxrFT2G+Yb7vNvUfPF+GgHCt/0jkayfsRXA1TwtZstf+JA0V+iQXdHA==}
@@ -4928,12 +4916,6 @@ snapshots:
   strip-literal@3.1.0:
     dependencies:
       js-tokens: 9.0.1
-
-  stripe@18.5.0(@types/node@24.19.2):
-    dependencies:
-      qs: 6.16.1
-    optionalDependencies:
-      '@types/node': 24.19.2
 
   strtok3@10.6.1:
     dependencies:

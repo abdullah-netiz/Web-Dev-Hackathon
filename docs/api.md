@@ -33,7 +33,7 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 |---|---|---|---|
 | GET | `/workspace` | any | includes lead-engine settings |
 | PATCH | `/workspace` | `settings.manage` | `{ name?, currency?, timeZone?, ackWindowSec?, escalationLevels?, levelWindowSec?, idleSec?, maxOpenLeadsDefault?, acknowledgedLeadsOnAbsence? }` (seconds) |
-| GET | `/users?includeInactive=` | any | each user: `baseLevel, role, availability, maxOpenLeads, backupUserId, isManager, telegramLinked, version` |
+| GET | `/users?includeInactive=` | any | each user: `baseLevel, role, availability, maxOpenLeads, backupUserId, isManager, slackLinked, slackUserId, version` |
 | POST | `/users` | `users.manage` | `{ email, firstName, lastName, baseLevel?: 'ADMIN'\|'USER', roleId?, timeZone? }` → `{ user, temporaryPassword }` (show once) |
 | GET | `/users/:id` | any | |
 | PATCH | `/users/:id` (or `me`) | self for profile; `users.manage` for role/level/limits | `{ firstName?, lastName?, baseLevel?, roleId?, maxOpenLeads?, backupUserId?, timeZone?, version? }`; Admin cannot modify Owner; only Owner grants Admin |
@@ -119,8 +119,8 @@ Lead status: `NEW → ASSIGNED → ACKNOWLEDGED → CLOSED`. `dueAt` is the ackn
 ## Payments (I2)
 
 - `POST /opportunities/:id/payment-requests` `{ amount, currency?, description?, expiresInMinutes? }` (`crm.edit`) → payment with `checkoutUrl` to send to the customer.
-- `GET /payments?status=&from=&to=&opportunityId=` · `GET /payments/:id`. Status (`PENDING, PAID, EXPIRED, FAILED, REFUNDED, PARTIALLY_REFUNDED`) changes only through Stripe webhooks; listen to `payment:updated`.
-- Stripe test card: `4242 4242 4242 4242`, any future date, any CVC.
+- `GET /payments?status=&from=&to=&opportunityId=` · `GET /payments/:id`. Status (`PENDING, PAID, EXPIRED, FAILED, REFUNDED, PARTIALLY_REFUNDED`) changes only through Lemon Squeezy webhooks (plus `EXPIRED` when an unpaid link passes its deadline); listen to `payment:updated`. Amounts are in the store currency; sending a different `currency` returns `422 CURRENCY_MISMATCH`.
+- Lemon Squeezy test card: `4242 4242 4242 4242`, any future date, any CVC.
 
 ## Calendar (I3)
 
@@ -139,12 +139,12 @@ Lead status: `NEW → ASSIGNED → ACKNOWLEDGED → CLOSED`. `dueAt` is the ackn
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/alerts/telegram/link` | `{ code, deepLink, instructions }` — user opens the bot and sends `/start <code>` |
-| GET | `/alerts/telegram/status` · DELETE `/alerts/telegram/link` | |
+| PUT | `/alerts/slack/link` | `{}` finds the Slack member by the user's email, or `{ slackUserId: "U0123ABCD" }`; Admins may add `userId`. Sends a test DM. `404 SLACK_USER_NOT_FOUND` asks for the member ID |
+| GET | `/alerts/slack/status` · DELETE `/alerts/slack/link` | `{ configured, linked, slackUserId }` |
 | GET | `/alerts?status=` | delivery attempts (`integrations.view` sees all) |
 | GET | `/integrations` | per provider: `status, lastOkAt, lastError, maskedCredentials, limits[], purpose, webhookUrl, statusCallbackUrl, details` |
-| PUT | `/integrations/:provider` | `twilio`: `{ credentials: { accountSid, authToken, whatsappFrom } }`; `stripe`: `{ credentials: { secretKey, webhookSecret } }`; `telegram`: `{ credentials: { botToken, webhookSecret } }` (`integrations.manage`) |
+| PUT | `/integrations/:provider` | `twilio`: `{ credentials: { accountSid, authToken, whatsappFrom } }`; `lemonsqueezy`: `{ credentials: { apiKey, storeId, variantId, webhookSecret }, config: { currency: "USD" } }`; `slack`: `{ credentials: { botToken } }` (`integrations.manage`) |
 | DELETE | `/integrations/:provider` | disconnect |
 | GET | `/integrations/events?provider=&status=` | sync history (`integrations.view`) |
 
-Webhook URLs to register with providers (shown on `GET /integrations`): Twilio `POST {PUBLIC_URL}/webhooks/twilio/{workspaceId}` and status callback `.../status`; Stripe `POST {PUBLIC_URL}/webhooks/stripe/{workspaceId}`; Telegram `POST {PUBLIC_URL}/webhooks/telegram` (set with the bot's `setWebhook` and the secret token).
+Webhook URLs to register with providers (shown on `GET /integrations`): Twilio `POST {PUBLIC_URL}/webhooks/twilio/{workspaceId}` and status callback `.../status`; Lemon Squeezy `POST {PUBLIC_URL}/webhooks/lemonsqueezy/{workspaceId}` (events `order_created`, `order_refunded`). Slack and Google need no webhook.

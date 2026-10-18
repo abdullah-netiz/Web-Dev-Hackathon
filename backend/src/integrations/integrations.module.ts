@@ -15,10 +15,10 @@ import { ConnectionsService } from './connections.service';
 import { InboundProcessor } from './inbound.processor';
 import { IntegrationEventsService } from './integration-events.service';
 import { IntegrationsController } from './integrations.controller';
-import { AlertsProcessor, OutboundProcessor } from './outbound.processors';
+import { AlertsProcessor, OutboundProcessor, PaymentsProcessor } from './outbound.processors';
 import { GoogleCalendarProvider } from './providers/google-calendar.provider';
-import { StripeProvider } from './providers/stripe.provider';
-import { TelegramProvider } from './providers/telegram.provider';
+import { LemonSqueezyProvider } from './providers/lemonsqueezy.provider';
+import { SlackProvider } from './providers/slack.provider';
 import { TwilioProvider } from './providers/twilio.provider';
 import { WebhooksController } from './webhooks.controller';
 
@@ -33,8 +33,8 @@ import { WebhooksController } from './webhooks.controller';
     ConnectionsService,
     IntegrationEventsService,
     TwilioProvider,
-    StripeProvider,
-    TelegramProvider,
+    LemonSqueezyProvider,
+    SlackProvider,
     GoogleCalendarProvider,
     MessagingService,
     PaymentsService,
@@ -43,6 +43,7 @@ import { WebhooksController } from './webhooks.controller';
     InboundProcessor,
     OutboundProcessor,
     AlertsProcessor,
+    PaymentsProcessor,
   ],
   exports: [ConnectionsService, IntegrationEventsService],
 })

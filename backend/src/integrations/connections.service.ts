@@ -9,11 +9,11 @@ import { PrismaService } from '../common/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export type TwilioCredentials = { accountSid: string; authToken: string; whatsappFrom: string };
-export type StripeCredentials = { secretKey: string; webhookSecret: string };
-export type TelegramCredentials = { botToken: string; webhookSecret: string };
+export type SlackCredentials = { botToken: string };
+export type { LemonSqueezyCredentials } from './providers/lemonsqueezy.provider';
 
-/** What each integration can and cannot do, shown verbatim in the UI (I5.6). */
-export const PROVIDER_INFO: Record<Exclude<Provider, 'WEB_FORM'>, { name: string; purpose: string; credentialKeys: string[]; limits: string[]; webhookPath: string | null }> = {
+/** What each integration can and cannot do, shown verbatim in the UI (I5.6). All four work from Pakistan. */
+export const PROVIDER_INFO: Record<Exclude<Provider, 'WEB_FORM'>, { name: string; purpose: string; credentialKeys: string[]; configKeys?: string[]; limits: string[]; webhookPath: string | null }> = {
   TWILIO: {
     name: 'Twilio WhatsApp Sandbox',
     purpose: 'Receive and send WhatsApp messages; unknown numbers become contacts and leads.',
@@ -26,16 +26,19 @@ export const PROVIDER_INFO: Record<Exclude<Provider, 'WEB_FORM'>, { name: string
     ],
     webhookPath: '/webhooks/twilio/<workspaceId>',
   },
-  STRIPE: {
-    name: 'Stripe (test mode)',
+  LEMONSQUEEZY: {
+    name: 'Lemon Squeezy (test mode)',
     purpose: 'Create payment links for opportunities; payment status updates arrive by webhook.',
-    credentialKeys: ['secretKey', 'webhookSecret'],
+    credentialKeys: ['apiKey', 'storeId', 'variantId', 'webhookSecret'],
+    configKeys: ['currency'],
     limits: [
-      'Test mode only: use Stripe test cards such as 4242 4242 4242 4242; no real money moves.',
-      "Card details are entered only on Stripe's hosted page; this platform never sees or stores card numbers.",
-      'Stripe retries failed webhook deliveries; duplicate deliveries are ignored by event id.',
+      'Test mode only: pay with the test card 4242 4242 4242 4242, any future date and any CVC; no real money moves.',
+      "Card details are entered only on Lemon Squeezy's hosted page; this platform never sees or stores card numbers.",
+      "Amounts are charged in the store's currency (set when the store was created).",
+      'Lemon Squeezy sends no "link expired" event, so unpaid links are marked expired here when their deadline passes.',
+      'Failed card attempts stay on the checkout page; only completed and refunded orders are reported back.',
     ],
-    webhookPath: '/webhooks/stripe/<workspaceId>',
+    webhookPath: '/webhooks/lemonsqueezy/<workspaceId>',
   },
   GOOGLE: {
     name: 'Google Calendar',
@@ -48,15 +51,16 @@ export const PROVIDER_INFO: Record<Exclude<Provider, 'WEB_FORM'>, { name: string
     ],
     webhookPath: null,
   },
-  TELEGRAM: {
-    name: 'Telegram bot',
-    purpose: 'Alerts the new owner outside the application when a lead escalates.',
-    credentialKeys: ['botToken', 'webhookSecret'],
+  SLACK: {
+    name: 'Slack',
+    purpose: 'Sends a direct message to the new owner when a lead escalates.',
+    credentialKeys: ['botToken'],
     limits: [
-      'Each employee must open the bot once and send their personal link code before they can receive alerts.',
-      'Telegram allows about 30 messages per second per bot and 1 message per second per chat; alerts are queued and retried 3 times.',
+      'Employees are matched to Slack by email automatically; anyone with a different Slack email sets their member ID in Settings → Notifications.',
+      'The Slack app needs the bot scopes chat:write, users:read and users:read.email.',
+      'Slack allows about one message per second per person; alerts are queued and retried up to 3 times.',
     ],
-    webhookPath: '/webhooks/telegram',
+    webhookPath: null,
   },
 };
 
@@ -74,15 +78,15 @@ export class ConnectionsService {
     const [connections, calendarTokens, linkedUsers] = await Promise.all([
       this.prisma.integrationConnection.findMany({ where: { workspaceId } }),
       this.prisma.calendarToken.findMany({ where: { workspaceId }, include: { user: { select: { id: true, firstName: true, lastName: true } } } }),
-      this.prisma.user.count({ where: { workspaceId, isActive: true, telegramChatId: { not: null } } }),
+      this.prisma.user.count({ where: { workspaceId, isActive: true, slackUserId: { not: null } } }),
     ]);
     const byProvider = new Map(connections.map((connection) => [connection.provider, connection]));
     return (Object.keys(PROVIDER_INFO) as Exclude<Provider, 'WEB_FORM'>[]).map((provider) => {
       const info = PROVIDER_INFO[provider];
       const connection = byProvider.get(provider);
       const credentials = connection?.credentialsEnc ? decryptJson<Record<string, string>>(connection.credentialsEnc, this.env.APP_ENCRYPTION_KEY) : {};
-      const telegramDefaultAvailable = provider === 'TELEGRAM' && Boolean(this.env.TELEGRAM_BOT_TOKEN);
-      const status = provider === 'GOOGLE' ? (calendarTokens.length > 0 ? 'CONNECTED' : 'NOT_CONNECTED') : connection?.status ?? (telegramDefaultAvailable ? 'CONNECTED' : 'NOT_CONNECTED');
+      const slackDefaultAvailable = provider === 'SLACK' && Boolean(this.env.SLACK_BOT_TOKEN);
+      const status = provider === 'GOOGLE' ? (calendarTokens.length > 0 ? 'CONNECTED' : 'NOT_CONNECTED') : connection?.status ?? (slackDefaultAvailable ? 'CONNECTED' : 'NOT_CONNECTED');
       return {
         provider,
         ...info,
@@ -96,8 +100,8 @@ export class ConnectionsService {
         details:
           provider === 'GOOGLE'
             ? { connectedUsers: calendarTokens.map((token) => ({ userId: token.userId, name: `${token.user.firstName} ${token.user.lastName}`, email: token.email, status: token.status })) }
-            : provider === 'TELEGRAM'
-              ? { linkedUsers, usingPlatformBot: !connection?.credentialsEnc && telegramDefaultAvailable }
+            : provider === 'SLACK'
+              ? { linkedUsers, usingPlatformBot: !connection?.credentialsEnc && slackDefaultAvailable }
               : {},
       };
     });
@@ -147,12 +151,11 @@ export class ConnectionsService {
     return { credentials: decryptJson<T>(connection.credentialsEnc, this.env.APP_ENCRYPTION_KEY), config: (connection.config ?? {}) as Record<string, unknown> };
   }
 
-  /** Workspace bot if configured, else the platform bot from the environment. */
-  async telegramCredentials(workspaceId: string): Promise<TelegramCredentials | null> {
-    const own = await this.credentials<TelegramCredentials>(workspaceId, 'TELEGRAM');
+  /** Workspace Slack app if connected, else the platform bot from SLACK_BOT_TOKEN. */
+  async slackCredentials(workspaceId: string): Promise<SlackCredentials | null> {
+    const own = await this.credentials<SlackCredentials>(workspaceId, 'SLACK');
     if (own) return own.credentials;
-    if (this.env.TELEGRAM_BOT_TOKEN) return { botToken: this.env.TELEGRAM_BOT_TOKEN, webhookSecret: this.env.TELEGRAM_WEBHOOK_SECRET ?? '' };
-    return null;
+    return this.env.SLACK_BOT_TOKEN ? { botToken: this.env.SLACK_BOT_TOKEN } : null;
   }
 
   /** Health updates feed the Integrations page (I5.1) and are pushed live. */
@@ -162,7 +165,7 @@ export class ConnectionsService {
       if (!ok) await this.prisma.integrationConnection.create({ data: { workspaceId, provider, status: 'ERROR', lastError: error?.slice(0, 500) } });
       return;
     }
-    const connectedStatus = existing.credentialsEnc || provider === 'TELEGRAM' || provider === 'GOOGLE' ? 'CONNECTED' : existing.status;
+    const connectedStatus = existing.credentialsEnc || provider === 'SLACK' || provider === 'GOOGLE' ? 'CONNECTED' : existing.status;
     await this.prisma.integrationConnection.update({
       where: { id: existing.id },
       data: ok ? { status: connectedStatus, lastOkAt: new Date(), lastError: null } : { status: 'ERROR', lastError: error?.slice(0, 500) ?? 'Unknown error' },

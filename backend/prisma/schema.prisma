@@ -25,13 +25,13 @@ model Workspace {
   updatedAt DateTime @updatedAt
 
   // Lead-engine settings, in seconds so a demo can observe them (F3.3–F3.7)
-  ackWindowSec              Int    @default(120)
-  escalationLevels          Int    @default(3)
-  levelWindowSec            Int    @default(120)
-  idleSec                   Int    @default(3600)
-  maxOpenLeadsDefault       Int    @default(5)
+  ackWindowSec               Int           @default(120)
+  escalationLevels           Int           @default(3)
+  levelWindowSec             Int           @default(120)
+  idleSec                    Int           @default(3600)
+  maxOpenLeadsDefault        Int           @default(5)
   acknowledgedLeadsOnAbsence AbsencePolicy @default(KEEP)
-  roundRobinCursor          Int    @default(0)
+  roundRobinCursor           Int           @default(0)
 
   users                  User[]
   roles                  Role[]
@@ -54,7 +54,6 @@ model Workspace {
   appointments           Appointment[]
   calendarTokens         CalendarToken[]
   alertDeliveries        AlertDelivery[]
-  memberLinks            MemberLink[]
 }
 
 enum AbsencePolicy {
@@ -87,7 +86,7 @@ model User {
   availability   Availability @default(OFFLINE)
   maxOpenLeads   Int?
   backupUserId   String?
-  telegramChatId String?
+  slackUserId    String? // Slack member ID for escalation alerts (I4.3)
   timeZone       String       @default("UTC")
   isActive       Boolean      @default(true)
   lastAssignedAt DateTime?
@@ -115,7 +114,6 @@ model User {
   appointments    Appointment[]    @relation("AppointmentUser")
   calendarToken   CalendarToken?
   alertDeliveries AlertDelivery[]
-  memberLinks     MemberLink[]
 
   @@index([workspaceId, availability])
   @@index([workspaceId, roleId])
@@ -396,17 +394,17 @@ enum AssignmentStatus {
 /// One row per ownership period. A partial unique index (manual migration) guarantees at most one
 /// PENDING assignment per lead (F3.8). `jobId` is the BullMQ delayed job behind the window (Q5).
 model LeadAssignment {
-  id         String           @id @default(uuid())
+  id          String           @id @default(uuid())
   workspaceId String
-  leadId     String
-  assigneeId String
-  level      Int              @default(0)
-  status     AssignmentStatus @default(PENDING)
-  reason     String?
-  assignedAt DateTime         @default(now())
-  dueAt      DateTime
-  resolvedAt DateTime?
-  jobId      String?
+  leadId      String
+  assigneeId  String
+  level       Int              @default(0)
+  status      AssignmentStatus @default(PENDING)
+  reason      String?
+  assignedAt  DateTime         @default(now())
+  dueAt       DateTime
+  resolvedAt  DateTime?
+  jobId       String?
   createdById String? // null = system (automatic)
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -491,9 +489,9 @@ model DashboardPref {
 
 enum Provider {
   TWILIO
-  STRIPE
+  LEMONSQUEEZY
   GOOGLE
-  TELEGRAM
+  SLACK
   WEB_FORM
 }
 
@@ -620,23 +618,23 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id                    String        @id @default(uuid())
-  workspaceId           String
-  opportunityId         String
-  contactId             String
-  requestedById         String?
-  amount                Decimal       @db.Decimal(14, 2)
-  currency              String
-  status                PaymentStatus @default(PENDING)
-  stripeSessionId       String?       @unique
-  stripePaymentIntentId String?
-  checkoutUrl           String?
-  refundedAmount        Decimal       @default(0) @db.Decimal(14, 2)
-  failureReason         String?
-  paidAt                DateTime?
-  expiresAt             DateTime?
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id              String        @id @default(uuid())
+  workspaceId     String
+  opportunityId   String
+  contactId       String
+  requestedById   String?
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String
+  status          PaymentStatus @default(PENDING)
+  checkoutId      String?       @unique // Lemon Squeezy checkout id
+  providerOrderId String? // Lemon Squeezy order id (I2.7 provider reference)
+  checkoutUrl     String?
+  refundedAmount  Decimal       @default(0) @db.Decimal(14, 2)
+  failureReason   String?
+  paidAt          DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
@@ -700,7 +698,7 @@ model AlertDelivery {
   leadId       String
   assignmentId String
   userId       String
-  channel      String    @default("TELEGRAM")
+  channel      String    @default("SLACK")
   status       String    @default("PENDING") // PENDING | SENT | FAILED
   attempts     Int       @default(0)
   lastError    String?
@@ -713,21 +711,4 @@ model AlertDelivery {
 
   @@unique([assignmentId, channel])
   @@index([workspaceId, status, createdAt(sort: Desc)])
-}
-
-/// One-time code an employee sends to the Telegram bot to link their chat (I4.3).
-model MemberLink {
-  id          String    @id @default(uuid())
-  workspaceId String
-  userId      String
-  channel     String    @default("TELEGRAM")
-  linkCode    String    @unique
-  destination String?
-  linkedAt    DateTime?
-  createdAt   DateTime  @default(now())
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, channel])
 }

@@ -24,7 +24,7 @@ const USER_SELECT = {
   backupUserId: true,
   timeZone: true,
   isActive: true,
-  telegramChatId: true,
+  slackUserId: true,
   lastAssignedAt: true,
   version: true,
   createdAt: true,
@@ -317,9 +317,8 @@ export class WorkspacesService {
     return role;
   }
 
-  private decorate<T extends { role: { permissions: string[] } | null; telegramChatId: string | null }>(user: T) {
-    const { telegramChatId, ...rest } = user;
-    return { ...rest, isManager: user.role ? isManagerRole(user.role.permissions) : false, telegramLinked: Boolean(telegramChatId) };
+  private decorate<T extends { role: { permissions: string[] } | null; slackUserId: string | null }>(user: T) {
+    return { ...user, isManager: user.role ? isManagerRole(user.role.permissions) : false, slackLinked: Boolean(user.slackUserId) };
   }
 }
 

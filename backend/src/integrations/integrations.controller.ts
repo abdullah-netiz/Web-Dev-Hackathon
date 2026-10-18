@@ -8,11 +8,11 @@ import { zodDto } from '../common/zod-validation.pipe';
 import { ConnectionsService } from './connections.service';
 import { IntegrationEventsService } from './integration-events.service';
 
-const providerParam = z.enum(['TWILIO', 'STRIPE', 'TELEGRAM']);
+const providerParam = z.enum(['TWILIO', 'LEMONSQUEEZY', 'SLACK']);
 const ConnectDto = zodDto(z.object({ credentials: z.record(z.string(), z.string().trim().min(1)), config: z.record(z.string(), z.unknown()).default({}) }));
 const EventsQueryDto = zodDto(
   paginationSchema.extend({
-    provider: z.enum(['TWILIO', 'STRIPE', 'GOOGLE', 'TELEGRAM', 'WEB_FORM']).optional(),
+    provider: z.enum(['TWILIO', 'LEMONSQUEEZY', 'GOOGLE', 'SLACK', 'WEB_FORM']).optional(),
     status: z.enum(['RECEIVED', 'PROCESSED', 'FAILED', 'REJECTED']).optional(),
   }),
 );

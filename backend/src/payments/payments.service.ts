@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Inject, Injectable, Logger, NotFoundException, type OnApplicationBootstrap } from '@nestjs/common';
 import { Prisma, type PaymentStatus } from '@prisma/client';
-import type Stripe from 'stripe';
+import { Queue } from 'bullmq';
 
 import { AuditService } from '../audit/audit.service';
 import { actorLabel, hasPermission, type AuthContext } from '../auth/auth.types';
@@ -10,9 +11,10 @@ import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
 import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
 import { ActivitiesService } from '../crm/activities.service';
-import { ConnectionsService, type StripeCredentials } from '../integrations/connections.service';
+import { ConnectionsService } from '../integrations/connections.service';
 import { IntegrationEventsService } from '../integrations/integration-events.service';
-import { StripeProvider } from '../integrations/providers/stripe.provider';
+import { LemonSqueezyProvider, type LemonSqueezyCredentials, type LemonSqueezyWebhook } from '../integrations/providers/lemonsqueezy.provider';
+import { JOB_NAMES, QUEUES } from '../jobs/queues';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 const PAYMENT_INCLUDE = {
@@ -22,11 +24,12 @@ const PAYMENT_INCLUDE = {
 } satisfies Prisma.PaymentInclude;
 
 /**
- * Payments through Stripe Checkout (I2). Status is driven only by verified webhooks (I2.2); each event is
- * applied once (I2.4); card data never touches us (I2.8). Collected vs projected follows Section 7.
+ * Payments through Lemon Squeezy hosted checkout (I2). Status changes only through verified webhooks
+ * (I2.2, I2.3) and each event is applied once (I2.4). Lemon Squeezy has no "checkout expired" event, so a
+ * sweep marks unpaid requests EXPIRED after their deadline (I2.5). Card data never touches us (I2.8).
  */
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaymentsService.name);
 
   constructor(
@@ -35,128 +38,137 @@ export class PaymentsService {
     private readonly activities: ActivitiesService,
     private readonly connections: ConnectionsService,
     private readonly events: IntegrationEventsService,
-    private readonly stripe: StripeProvider,
+    private readonly lemonSqueezy: LemonSqueezyProvider,
     private readonly realtime: RealtimeGateway,
     private readonly domainEvents: DomainEvents,
+    @InjectQueue(QUEUES.payments) private readonly paymentsQueue: Queue,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  /** I2.1: create a payment request for a stated amount and currency; returns the hosted checkout URL. */
+  async onApplicationBootstrap() {
+    await this.paymentsQueue.upsertJobScheduler('payment-expiry-sweep', { every: 30_000 }, { name: JOB_NAMES.expirePayments, opts: { removeOnComplete: { count: 10 }, removeOnFail: { count: 10 } } });
+  }
+
+  /** I2.1: create a payment request for a stated amount; returns the hosted checkout URL to send to the customer. */
   async createRequest(auth: AuthContext, opportunityId: string, input: { amount: number; currency?: string; description?: string; expiresInMinutes?: number }) {
     const opportunity = await this.prisma.opportunity.findFirst({ where: { id: opportunityId, workspaceId: auth.workspaceId }, include: { contact: true } });
     if (!opportunity) throw new NotFoundException({ code: 'OPPORTUNITY_NOT_FOUND', message: 'Opportunity not found.' });
-    const stored = await this.connections.credentials<StripeCredentials>(auth.workspaceId, 'STRIPE');
-    if (!stored) throw new DomainError('STRIPE_NOT_CONNECTED', 'Payments are not connected for this workspace.', 409, 'Connect Stripe in Settings → Integrations.');
-    const currency = (input.currency ?? opportunity.currency).toUpperCase();
+    const stored = await this.connections.credentials<LemonSqueezyCredentials>(auth.workspaceId, 'LEMONSQUEEZY');
+    if (!stored) throw new DomainError('PAYMENTS_NOT_CONNECTED', 'Payments are not connected for this workspace.', 409, 'Connect Lemon Squeezy in Settings → Integrations.');
 
-    // Create the record first so the Stripe idempotency key is stable across retries
+    // Lemon Squeezy charges in the store's currency, so the request is recorded in that currency
+    const storeCurrency = String(stored.config.currency ?? 'USD').toUpperCase();
+    if (input.currency && input.currency.toUpperCase() !== storeCurrency) {
+      throw new DomainError('CURRENCY_MISMATCH', `Payments are collected in ${storeCurrency}, the currency of the connected store.`, 422, `Enter the amount in ${storeCurrency}.`);
+    }
+    const expiresAt = new Date(Date.now() + (input.expiresInMinutes ?? 60) * 60_000);
+
     const payment = await this.prisma.payment.create({
-      data: { workspaceId: auth.workspaceId, opportunityId, contactId: opportunity.contactId, requestedById: auth.userId, amount: new Prisma.Decimal(input.amount), currency, status: 'PENDING' },
+      data: { workspaceId: auth.workspaceId, opportunityId, contactId: opportunity.contactId, requestedById: auth.userId, amount: new Prisma.Decimal(input.amount), currency: storeCurrency, status: 'PENDING', expiresAt },
     });
     try {
-      const checkout = await this.stripe.createCheckout(stored.credentials, {
+      const checkout = await this.lemonSqueezy.createCheckout(stored.credentials, {
         paymentId: payment.id,
+        workspaceId: auth.workspaceId,
         amount: input.amount,
-        currency,
-        description: input.description ?? `${opportunity.name} — ${opportunity.contact.firstName} ${opportunity.contact.lastName}`.trim(),
+        name: opportunity.name,
+        description: input.description,
         customerEmail: opportunity.contact.email ?? undefined,
-        successUrl: `${this.env.APP_URL}/pay/success?payment=${payment.id}`,
-        cancelUrl: `${this.env.APP_URL}/pay/cancelled?payment=${payment.id}`,
-        metadata: { paymentId: payment.id, workspaceId: auth.workspaceId, opportunityId },
-        expiresInMinutes: input.expiresInMinutes,
+        customerName: `${opportunity.contact.firstName} ${opportunity.contact.lastName}`.trim(),
+        redirectUrl: `${this.env.APP_URL}/pay/success?payment=${payment.id}`,
+        expiresAt,
       });
       const updated = await this.prisma.$transaction(async (tx) => {
-        const saved = await tx.payment.update({
-          where: { id: payment.id },
-          data: { stripeSessionId: checkout.sessionId, stripePaymentIntentId: checkout.paymentIntentId, checkoutUrl: checkout.url, expiresAt: checkout.expiresAt },
-          include: PAYMENT_INCLUDE,
-        });
+        const saved = await tx.payment.update({ where: { id: payment.id }, data: { checkoutId: checkout.checkoutId, checkoutUrl: checkout.url, expiresAt: checkout.expiresAt ?? expiresAt }, include: PAYMENT_INCLUDE });
         await tx.opportunity.update({ where: { id: opportunityId }, data: { paymentStatus: opportunity.paymentStatus === 'PAID' ? 'PAID' : 'PENDING' } });
-        await this.activities.logTx(tx, { workspaceId: auth.workspaceId, entityType: 'OPPORTUNITY', entityId: opportunityId, type: 'payment', actorId: auth.userId, payload: { paymentId: payment.id, status: 'PENDING', amount: input.amount, currency } });
-        await this.audit.recordTx(tx, { workspaceId: auth.workspaceId, actorId: auth.userId, actorLabel: actorLabel(auth), action: 'payment.requested', targetType: 'payment', targetId: payment.id, after: { opportunityId, amount: input.amount, currency, stripeSessionId: checkout.sessionId } });
+        await this.activities.logTx(tx, { workspaceId: auth.workspaceId, entityType: 'OPPORTUNITY', entityId: opportunityId, type: 'payment', actorId: auth.userId, payload: { paymentId: payment.id, status: 'PENDING', amount: input.amount, currency: storeCurrency } });
+        await this.audit.recordTx(tx, { workspaceId: auth.workspaceId, actorId: auth.userId, actorLabel: actorLabel(auth), action: 'payment.requested', targetType: 'payment', targetId: payment.id, after: { opportunityId, amount: input.amount, currency: storeCurrency, checkoutId: checkout.checkoutId } });
         return saved;
       });
-      await this.events.record({ workspaceId: auth.workspaceId, provider: 'STRIPE', direction: 'OUT', type: 'checkout.session.created', externalEventId: `out:${checkout.sessionId}`, payload: { sessionId: checkout.sessionId, amount: input.amount, currency }, relatedType: 'payment', relatedId: payment.id });
-      await this.connections.markHealth(auth.workspaceId, 'STRIPE', true);
+      await this.events.record({ workspaceId: auth.workspaceId, provider: 'LEMONSQUEEZY', direction: 'OUT', type: 'checkout.created', externalEventId: `out:${checkout.checkoutId}`, payload: { checkoutId: checkout.checkoutId, amount: input.amount, currency: storeCurrency }, relatedType: 'payment', relatedId: payment.id });
+      await this.connections.markHealth(auth.workspaceId, 'LEMONSQUEEZY', true);
       this.domainEvents.emit('opportunity.activity', { workspaceId: auth.workspaceId, opportunityId, actorId: auth.userId, type: 'payment' });
       this.realtime.toWorkspace(auth.workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId, status: 'PENDING' });
       return this.mask(auth, updated);
     } catch (error) {
       await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', failureReason: (error as Error).message } });
-      await this.events.record({ workspaceId: auth.workspaceId, provider: 'STRIPE', direction: 'OUT', type: 'checkout.session.failed', payload: { message: (error as Error).message }, relatedType: 'payment', relatedId: payment.id });
-      await this.connections.markHealth(auth.workspaceId, 'STRIPE', false, (error as Error).message);
+      await this.events.record({ workspaceId: auth.workspaceId, provider: 'LEMONSQUEEZY', direction: 'OUT', type: 'checkout.failed', payload: { message: (error as Error).message }, relatedType: 'payment', relatedId: payment.id });
+      await this.connections.markHealth(auth.workspaceId, 'LEMONSQUEEZY', false, (error as Error).message);
+      this.realtime.toWorkspace(auth.workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId, status: 'FAILED' });
       throw error;
     }
   }
 
-  /** Applies a verified Stripe event. Idempotent: transitions only move forward and refunds are absolute. */
+  /** Applies a verified webhook. Idempotent: states only move forward and refund totals are absolute. */
   async handleEvent(workspaceId: string, raw: unknown) {
-    const event = raw as Stripe.Event;
-    const object = event.data.object as Stripe.Checkout.Session | Stripe.PaymentIntent | Stripe.Charge | Stripe.Refund;
-    const payment = await this.locatePayment(workspaceId, event, object);
+    const event = raw as LemonSqueezyWebhook;
+    const attributes = event.data.attributes;
+    const paymentId = event.meta.custom_data?.payment_id;
+    const payment = paymentId ? await this.prisma.payment.findFirst({ where: { id: paymentId, workspaceId } }) : await this.prisma.payment.findFirst({ where: { workspaceId, providerOrderId: event.data.id } });
     if (!payment) {
-      this.logger.warn(`Stripe event ${event.type} (${event.id}) did not match a payment in workspace ${workspaceId}`);
+      this.logger.warn(`Lemon Squeezy ${event.meta.event_name} (order ${event.data.id}) did not match a payment in workspace ${workspaceId}`);
       return undefined;
     }
 
+    const orderStatus = String(attributes.status ?? '');
+    const refundedCents = Number(attributes.refunded_amount ?? 0);
     let status: PaymentStatus = payment.status;
-    const data: Prisma.PaymentUpdateInput = {};
-    switch (event.type) {
-      case 'checkout.session.completed':
-      case 'checkout.session.async_payment_succeeded': {
-        const session = object as Stripe.Checkout.Session;
-        if (session.payment_status === 'paid') {
-          status = payment.status === 'REFUNDED' || payment.status === 'PARTIALLY_REFUNDED' ? payment.status : 'PAID';
-          data.paidAt = payment.paidAt ?? new Date(event.created * 1000);
-          data.stripePaymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : payment.stripePaymentIntentId;
+    const data: Prisma.PaymentUpdateInput = { providerOrderId: event.data.id };
+
+    switch (event.meta.event_name) {
+      case 'order_created':
+      case 'order_updated':
+        if (orderStatus === 'paid' && (payment.status === 'PENDING' || payment.status === 'EXPIRED' || payment.status === 'FAILED')) {
+          // A customer who pays just after our expiry sweep still counts as paid: the provider is authoritative
+          status = 'PAID';
+          data.paidAt = payment.paidAt ?? new Date(String(attributes.created_at ?? new Date().toISOString()));
+        } else if (orderStatus === 'failed' && payment.status === 'PENDING') {
+          status = 'FAILED';
+          data.failureReason = 'The payment failed at the provider.';
         }
         break;
-      }
-      case 'checkout.session.expired':
-        if (payment.status === 'PENDING') status = 'EXPIRED';
-        break;
-      case 'checkout.session.async_payment_failed':
-      case 'payment_intent.payment_failed': {
-        if (payment.status === 'PENDING') status = 'FAILED';
-        const intent = object as Stripe.PaymentIntent;
-        data.failureReason = intent.last_payment_error?.message ?? 'Payment failed at the provider.';
-        break;
-      }
-      case 'charge.refunded': {
-        const charge = object as Stripe.Charge;
-        const refunded = charge.amount_refunded / 100;
-        data.refundedAmount = new Prisma.Decimal(refunded);
-        status = refunded >= Number(payment.amount) ? 'REFUNDED' : refunded > 0 ? 'PARTIALLY_REFUNDED' : status;
-        break;
-      }
-      case 'refund.created':
-      case 'refund.updated': {
-        const refund = object as Stripe.Refund;
-        if (refund.status === 'succeeded') {
-          const refunded = Math.max(Number(payment.refundedAmount), refund.amount / 100);
-          data.refundedAmount = new Prisma.Decimal(refunded);
-          status = refunded >= Number(payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
-        }
+      case 'order_refunded': {
+        const refunded = refundedCents / 100;
+        data.refundedAmount = new Prisma.Decimal(Math.max(refunded, Number(payment.refundedAmount)));
+        status = orderStatus === 'refunded' || refunded >= Number(payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+        data.paidAt = payment.paidAt ?? new Date();
         break;
       }
       default:
         return { relatedType: 'payment', relatedId: payment.id };
     }
 
-    const changed = status !== payment.status || Object.keys(data).length > 0;
-    if (!changed) return { relatedType: 'payment', relatedId: payment.id };
+    const statusChanged = status !== payment.status;
+    const refundChanged = data.refundedAmount !== undefined && Number(data.refundedAmount) !== Number(payment.refundedAmount);
+    if (!statusChanged && !refundChanged && payment.providerOrderId === event.data.id) return { relatedType: 'payment', relatedId: payment.id };
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({ where: { id: payment.id }, data: { ...data, status } });
-      const opportunityStatus = await this.opportunityPaymentState(tx, payment.opportunityId);
-      await tx.opportunity.update({ where: { id: payment.opportunityId }, data: { paymentStatus: opportunityStatus } });
-      await this.activities.logTx(tx, { workspaceId, entityType: 'OPPORTUNITY', entityId: payment.opportunityId, type: 'payment', actorId: null, payload: { paymentId: payment.id, status, event: event.type, amount: Number(payment.amount), currency: payment.currency } });
-      await this.audit.recordTx(tx, { workspaceId, actorId: null, actorLabel: 'stripe webhook', action: `payment.${status.toLowerCase()}`, targetType: 'payment', targetId: payment.id, before: { status: payment.status }, after: { status, event: event.type, eventId: event.id } });
+      await tx.opportunity.update({ where: { id: payment.opportunityId }, data: { paymentStatus: await this.opportunityPaymentState(tx, payment.opportunityId) } });
+      if (statusChanged || refundChanged) {
+        await this.activities.logTx(tx, { workspaceId, entityType: 'OPPORTUNITY', entityId: payment.opportunityId, type: 'payment', actorId: null, payload: { paymentId: payment.id, status, event: event.meta.event_name, amount: Number(payment.amount), currency: payment.currency, orderId: event.data.id } });
+        await this.audit.recordTx(tx, { workspaceId, actorId: null, actorLabel: 'lemon squeezy webhook', action: `payment.${status.toLowerCase()}`, targetType: 'payment', targetId: payment.id, before: { status: payment.status, refundedAmount: Number(payment.refundedAmount) }, after: { status, event: event.meta.event_name, orderId: event.data.id, refundedAmount: data.refundedAmount !== undefined ? Number(data.refundedAmount) : undefined } });
+      }
     });
-    await this.connections.markHealth(workspaceId, 'STRIPE', true);
-    this.realtime.toWorkspace(workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId: payment.opportunityId, status, event: event.type });
-    if (payment.requestedById) this.realtime.toUser(payment.requestedById, 'notification', { title: `Payment ${status.toLowerCase().replace('_', ' ')}`, body: `${payment.currency} ${Number(payment.amount).toFixed(2)}`, link: `/opportunities/${payment.opportunityId}` });
+    await this.connections.markHealth(workspaceId, 'LEMONSQUEEZY', true);
+    this.realtime.toWorkspace(workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId: payment.opportunityId, status, event: event.meta.event_name });
+    if (payment.requestedById && statusChanged) this.realtime.toUser(payment.requestedById, 'notification', { title: `Payment ${status.toLowerCase().replace('_', ' ')}`, body: `${payment.currency} ${Number(payment.amount).toFixed(2)}`, link: `/opportunities/${payment.opportunityId}` });
     return { relatedType: 'payment', relatedId: payment.id };
+  }
+
+  /** I2.5: unpaid requests past their deadline become EXPIRED (runs every 30 s). */
+  async expireOverdue() {
+    const overdue = await this.prisma.payment.findMany({ where: { status: 'PENDING', expiresAt: { lt: new Date() } }, select: { id: true, workspaceId: true, opportunityId: true } });
+    for (const payment of overdue) {
+      const updated = await this.prisma.payment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'EXPIRED' } });
+      if (updated.count === 0) continue;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.opportunity.update({ where: { id: payment.opportunityId }, data: { paymentStatus: await this.opportunityPaymentState(tx, payment.opportunityId) } });
+        await this.activities.logTx(tx, { workspaceId: payment.workspaceId, entityType: 'OPPORTUNITY', entityId: payment.opportunityId, type: 'payment', actorId: null, payload: { paymentId: payment.id, status: 'EXPIRED', reason: 'payment link expired unpaid' } });
+      });
+      this.realtime.toWorkspace(payment.workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId: payment.opportunityId, status: 'EXPIRED' });
+    }
+    return { expired: overdue.length };
   }
 
   async list(auth: AuthContext, query: Pagination & { status?: PaymentStatus; from?: string; to?: string; opportunityId?: string }) {
@@ -183,20 +195,6 @@ export class PaymentsService {
   private mask<T extends { amount: Prisma.Decimal; refundedAmount: Prisma.Decimal }>(auth: AuthContext, payment: T) {
     const canSee = hasPermission(auth, 'crm.view_values');
     return { ...payment, amount: canSee ? Number(payment.amount) : null, refundedAmount: canSee ? Number(payment.refundedAmount) : null, valueHidden: !canSee };
-  }
-
-  private async locatePayment(workspaceId: string, event: Stripe.Event, object: { id: string; metadata?: Stripe.Metadata | null }) {
-    const metadataId = object.metadata?.paymentId;
-    if (metadataId) {
-      const byMeta = await this.prisma.payment.findFirst({ where: { id: metadataId, workspaceId } });
-      if (byMeta) return byMeta;
-    }
-    if (event.type.startsWith('checkout.session')) {
-      return this.prisma.payment.findFirst({ where: { stripeSessionId: object.id, workspaceId } });
-    }
-    const intentId = 'payment_intent' in object ? ((object as Stripe.Charge).payment_intent as string | null) : event.type.startsWith('payment_intent') ? object.id : null;
-    if (intentId) return this.prisma.payment.findFirst({ where: { stripePaymentIntentId: intentId, workspaceId } });
-    return null;
   }
 
   private async opportunityPaymentState(tx: Prisma.TransactionClient, opportunityId: string) {

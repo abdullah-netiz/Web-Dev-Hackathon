@@ -7,7 +7,8 @@ COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
-RUN pnpm prisma generate && pnpm build && pnpm prune --prod
+# Dev dependencies are kept: the Prisma CLI is needed at start-up for `migrate deploy`
+RUN pnpm prisma generate && pnpm build
 
 FROM node:24-alpine
 WORKDIR /app

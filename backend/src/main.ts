@@ -11,7 +11,7 @@ import { loadEnv } from './common/env';
 
 async function bootstrap() {
   const env = loadEnv();
-  // rawBody: Stripe and Twilio signatures are computed over the exact bytes received (AGENTS.md §4.5).
+  // rawBody: Lemon Squeezy and Twilio signatures are computed over the exact bytes received (AGENTS.md §4.5).
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ trustProxy: true, bodyLimit: 1_048_576 }),

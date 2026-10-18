@@ -15,7 +15,7 @@ A multi-tenant web platform for 5–30 person service companies:
 - **Lead engine** — capture → round-robin assignment → acknowledgement window → escalation chain → recovery queue (F3). *The core: a lead must never be without an accountable owner.*
 - **Audit history** — append-only record of important actions (F4).
 - **Dashboard** — live, role-aware, drill-down figures using Section 7 definitions (F5).
-- **Real integrations in sandbox/test mode** — Twilio WhatsApp (I1), Stripe (I2), Google Calendar (I3), Telegram alerts (I4), shared rules (I5).
+- **Real integrations in sandbox/test mode** — Twilio WhatsApp (I1), Lemon Squeezy payments (I2), Google Calendar (I3), Slack alerts (I4), shared rules (I5). Every provider must work from Pakistan: Telegram is blocked there and Stripe does not onboard Pakistani accounts, so neither is used.
 
 Out of scope: accounting, payroll, ad analytics, report builder, training, marketing site, platform billing.
 
@@ -75,7 +75,7 @@ backend/src/
   audit/         append-only audit writer + read endpoint
   metrics/       Section 7 definitions, dashboard endpoint
   realtime/      Socket.IO gateway (ws token, rooms, emit helpers)
-  integrations/  connections, integration_events, webhooks controller, providers/{twilio,stripe,google,telegram}
+  integrations/  connections, integration_events, webhooks controller, providers/{twilio,lemonsqueezy,google-calendar,slack}
   messaging/ payments/ calendar/ alerts/   domain services mapping provider events ⇄ records
   jobs/          BullMQ root config, queue names, processors registration
 ```

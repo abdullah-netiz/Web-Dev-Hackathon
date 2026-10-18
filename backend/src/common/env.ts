@@ -17,8 +17,7 @@ const envSchema = z.object({
   SESSION_ABSOLUTE_DAYS: z.coerce.number().positive().default(7),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  TELEGRAM_BOT_TOKEN: z.string().optional(),
-  TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
+  SLACK_BOT_TOKEN: z.string().optional(), // platform-wide Slack bot; a workspace can connect its own instead
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

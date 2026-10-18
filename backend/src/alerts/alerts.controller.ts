@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 
 import { CurrentUser } from '../auth/auth.decorators';
@@ -8,23 +8,29 @@ import { zodDto } from '../common/zod-validation.pipe';
 import { AlertsService } from './alerts.service';
 
 const ListDto = zodDto(paginationSchema.extend({ status: z.enum(['PENDING', 'SENT', 'FAILED']).optional() }));
+const LinkDto = zodDto(
+  z.object({
+    slackUserId: z.string().trim().regex(/^[UW][A-Z0-9]{6,}$/, 'Slack member IDs look like U0123ABCD').optional(),
+    userId: z.string().uuid().optional(),
+  }),
+);
 
 @Controller('alerts')
 export class AlertsController {
   constructor(private readonly alerts: AlertsService) {}
 
-  /** I4.3: each employee links their own Telegram chat with a one-time code. */
-  @Post('telegram/link')
-  async link(@CurrentUser() auth: AuthContext) {
-    return { data: await this.alerts.linkCode(auth) };
+  /** I4.3: set the Slack destination. Empty body = find the Slack member by the user's email. Sends a test DM. */
+  @Put('slack/link')
+  async link(@CurrentUser() auth: AuthContext, @Body() body: InstanceType<typeof LinkDto>) {
+    return { data: await this.alerts.link(auth, body) };
   }
 
-  @Delete('telegram/link')
+  @Delete('slack/link')
   async unlink(@CurrentUser() auth: AuthContext) {
     return { data: await this.alerts.unlink(auth) };
   }
 
-  @Get('telegram/status')
+  @Get('slack/status')
   async status(@CurrentUser() auth: AuthContext) {
     return { data: await this.alerts.myStatus(auth) };
   }

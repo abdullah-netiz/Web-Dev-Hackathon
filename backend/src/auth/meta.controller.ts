@@ -28,7 +28,7 @@ export class MetaController {
         customFieldEntities: ['CONTACT', 'COMPANY', 'OPPORTUNITY'],
         paymentStatuses: ['PENDING', 'PAID', 'EXPIRED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'],
         messageStatuses: ['QUEUED', 'SENT', 'DELIVERED', 'READ', 'UNDELIVERED', 'FAILED'],
-        providers: ['TWILIO', 'STRIPE', 'GOOGLE', 'TELEGRAM'],
+        providers: ['TWILIO', 'LEMONSQUEEZY', 'GOOGLE', 'SLACK'],
       },
     };
   }

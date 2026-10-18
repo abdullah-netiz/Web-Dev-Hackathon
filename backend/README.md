@@ -2,7 +2,7 @@
 
 NestJS 11 (Fastify) · Prisma 6 + PostgreSQL · BullMQ + Redis · Socket.IO · Zod. The API owns accounts and
 permissions, the customizable CRM, the lead assignment/escalation engine, audit history, the dashboard
-metrics and the Twilio, Stripe, Google Calendar and Telegram integrations. Rules and architecture:
+metrics and the Twilio, Lemon Squeezy, Google Calendar and Slack integrations (all usable from Pakistan). Rules and architecture:
 [`../AGENTS.md`](../AGENTS.md). Endpoint reference for the frontend: [`../docs/api.md`](../docs/api.md).
 
 ## Run locally (Q13)
@@ -33,8 +33,8 @@ Public lead form for the demo workspace: `GET /f/demo`.
 
 ### Local webhooks
 
-- Stripe: `stripe listen --forward-to localhost:4000/webhooks/stripe/<workspaceId>` and put the printed `whsec_…` into the Stripe integration.
-- Twilio and Telegram need a public URL: `ngrok http 4000`, set `PUBLIC_URL` to the ngrok URL, restart, then paste the URLs shown on `GET /integrations` into the Twilio sandbox settings and `setWebhook` for the bot.
+- Twilio and Lemon Squeezy need a public URL: `ngrok http 4000`, set `PUBLIC_URL` to the ngrok URL, restart, then paste the URLs shown on `GET /integrations` into the Twilio sandbox settings and the Lemon Squeezy webhook settings.
+- Slack needs no webhook: it only receives direct messages.
 - Google: add `${PUBLIC_URL}/calendar/google/callback` as an authorized redirect URI of the OAuth client.
 
 ## Scripts
@@ -53,10 +53,17 @@ Public lead form for the demo workspace: `GET /f/demo`.
 
 1. A lead is captured (public form, inbound WhatsApp, or manual) and `assign()` runs in a transaction that locks the workspace row (round-robin cursor and settings) and the lead row, picks the next Available employee under their open-lead limit, inserts a `PENDING` assignment and schedules a BullMQ delayed job `esc-<leadId>-<assignmentId>` for the acknowledgement window.
 2. Acknowledging (button, note, message, stage change, appointment) marks the assignment `ACKNOWLEDGED` and removes the job.
-3. When the job fires it re-reads the assignment; only a still-`PENDING` one escalates: level 1 next available, level 2 the assignee's backup, level 3 a manager. The new owner gets a Socket.IO notification and a Telegram alert.
+3. When the job fires it re-reads the assignment; only a still-`PENDING` one escalates: level 1 next available, level 2 the assignee's backup, level 3 a manager. The new owner gets a Socket.IO notification and a Slack direct message.
 4. A sweep every 30 s sets `recoveryReason` (`OVERDUE`, `ESCALATED_TWICE`, `IDLE`) from the Section 7 definitions; on startup a reconciliation re-enqueues any window that passed while the server was down.
 5. A partial unique index allows one `PENDING` assignment per lead, so two owners at once is impossible at the database level.
 
-## Deploy (Railway)
+## Deploy (Render + Supabase)
 
-Build with the `Dockerfile` in this folder. Set the variables from `.env.example`; `PUBLIC_URL` must be the public HTTPS origin of the API and `APP_URL`/`CORS_ORIGINS` the frontend origin. Redis must run with `maxmemory-policy noeviction`. The container runs `prisma migrate deploy` and then starts the API; the BullMQ workers run inside the same process.
+- **Service type:** Render Web Service, language Node, root directory `backend`.
+- **Build command:** `npx --yes pnpm@10 install --frozen-lockfile --prod=false && npx prisma generate && npx --yes pnpm@10 build`
+- **Start command:** `npx prisma migrate deploy && node dist/main.js` (health check path `/health`).
+- **Database:** Supabase **Session pooler** connection string with `?connection_limit=5`.
+- **Redis:** Render Key Value with maxmemory policy `noeviction`.
+- **Environment:** set every variable from `.env.example`. `PUBLIC_URL` is the Render URL; `APP_URL` and `CORS_ORIGINS` are the Vercel URL.
+
+The BullMQ workers run inside the same process. The `Dockerfile` also works if you prefer a Docker deploy.
