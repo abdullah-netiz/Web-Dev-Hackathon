@@ -36,6 +36,7 @@ export class MetricsService {
     const last24h = new Date(now.getTime() - 24 * 3600_000);
     const canSeeValues = hasPermission(auth, 'crm.view_values');
     const prefs = await this.prisma.dashboardPref.findUnique({ where: { userId: auth.userId } });
+    const responseTrend = await this.responseTrend(scope, workspace.timeZone);
 
     const [newLeads, openByStage, stages, responded, recovery, escalations, availability, appointments, collected, refunded, pending] = await Promise.all([
       this.prisma.lead.count({ where: newLeadsToday(scope, dayStart) }),
@@ -83,11 +84,34 @@ export class MetricsService {
       hiddenWidgets: prefs?.hiddenWidgets ?? [],
       availableWidgets: WIDGETS,
       widgets,
+      responseTrend,
     };
   }
 
+  /**
+   * Last 7 local days: leads created per day and the average time to first response of leads first
+   * acknowledged that day (Section 7 definition, same as the headline figure).
+   */
+  private async responseTrend(scope: Scope, timeZone: string) {
+    const rows = await this.prisma.$queryRaw<{ day: string; leads: number; avg_sec: number | null }[]>`
+      WITH days AS (
+        SELECT generate_series((now() AT TIME ZONE ${timeZone})::date - 6, (now() AT TIME ZONE ${timeZone})::date, interval '1 day')::date AS day
+      )
+      SELECT to_char(d.day, 'YYYY-MM-DD') AS day,
+        (SELECT count(*)::int FROM "Lead" l WHERE l."workspaceId" = ${scope.workspaceId}
+          AND (${scope.userId ?? null}::text IS NULL OR l."currentAssigneeId" = ${scope.userId ?? null})
+          AND (l."createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timeZone})::date = d.day) AS leads,
+        (SELECT round(avg(l."timeToFirstResponseSec"))::int FROM "Lead" l WHERE l."workspaceId" = ${scope.workspaceId}
+          AND (${scope.userId ?? null}::text IS NULL OR l."currentAssigneeId" = ${scope.userId ?? null})
+          AND l."firstAckedAt" IS NOT NULL
+          AND (l."firstAckedAt" AT TIME ZONE 'UTC' AT TIME ZONE ${timeZone})::date = d.day) AS avg_sec
+      FROM days d ORDER BY d.day`;
+    return rows.map((row) => ({ day: row.day, leads: Number(row.leads), avgSec: row.avg_sec === null ? null : Number(row.avg_sec) }));
+  }
+
   async setPrefs(userId: string, hiddenWidgets: string[]) {
-    const valid = hiddenWidgets.filter((widget) => (WIDGETS as readonly string[]).includes(widget));
+    // Widget keys belong to the frontend layout, so any short key is accepted (F5.5)
+    const valid = [...new Set(hiddenWidgets.filter((widget) => /^[A-Za-z0-9_.-]{1,60}$/.test(widget)))];
     return this.prisma.dashboardPref.upsert({ where: { userId }, create: { userId, hiddenWidgets: valid }, update: { hiddenWidgets: valid } });
   }
 }

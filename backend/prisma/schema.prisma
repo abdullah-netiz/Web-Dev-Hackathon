@@ -75,24 +75,29 @@ enum Availability {
 }
 
 model User {
-  id             String       @id @default(uuid())
-  workspaceId    String
-  email          String       @unique
-  passwordHash   String
-  firstName      String
-  lastName       String
-  baseLevel      BaseLevel    @default(USER)
-  roleId         String?
-  availability   Availability @default(OFFLINE)
-  maxOpenLeads   Int?
-  backupUserId   String?
-  slackUserId    String? // Slack member ID for escalation alerts (I4.3)
-  timeZone       String       @default("UTC")
-  isActive       Boolean      @default(true)
-  lastAssignedAt DateTime?
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                  String       @id @default(uuid())
+  workspaceId         String
+  email               String       @unique
+  passwordHash        String
+  firstName           String
+  lastName            String
+  baseLevel           BaseLevel    @default(USER)
+  roleId              String?
+  availability        Availability @default(OFFLINE)
+  maxOpenLeads        Int?
+  backupUserId        String?
+  slackUserId         String? // Slack member ID for escalation alerts (I4.3)
+  timeZone            String       @default("UTC")
+  isActive            Boolean      @default(true)
+  /// Explicitly designated as an escalation manager (F3.5 level 3), in addition to manager roles
+  isEscalationManager Boolean      @default(false)
+  /// SHA-256 of a one-time invite token (F1.2); cleared when the invite is accepted
+  inviteTokenHash     String?      @unique
+  inviteExpiresAt     DateTime?
+  lastAssignedAt      DateTime?
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   role       Role?     @relation(fields: [roleId], references: [id], onDelete: SetNull)
@@ -161,6 +166,8 @@ model Company {
   workspaceId String
   name        String
   domain      String?
+  industry    String?
+  city        String?
   ownerId     String?
   custom      Json     @default("{}")
   version     Int      @default(1)

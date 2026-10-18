@@ -8,7 +8,8 @@ import { ENV, type Env } from '../common/env';
 import { PrismaService } from '../common/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { type AuthContext } from './auth.types';
-import { DEFAULT_ROLES, type Permission } from './permissions';
+import { DEFAULT_ROLES, PERMISSIONS, type Permission } from './permissions';
+import { openLeadCounts, toUserView, USER_SELECT } from '../workspaces/user-view';
 
 // OWASP minimum Argon2id configuration; bounded memory under concurrent logins (Q1).
 const ARGON2_OPTIONS: argon2.Options = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
@@ -148,6 +149,61 @@ export class AuthService {
       roleName: user.role?.name ?? null,
       permissions: new Set((user.role?.permissions ?? []) as Permission[]),
     };
+  }
+
+  /**
+   * Full session for the app shell: the user as the members list shows them, the workspace, effective
+   * permissions (Owner/Admin hold every permission, F1.2) and when the session expires.
+   */
+  async sessionView(auth: AuthContext) {
+    const [user, workspace, session, counts] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: auth.userId }, select: USER_SELECT }),
+      this.prisma.workspace.findUniqueOrThrow({ where: { id: auth.workspaceId } }),
+      this.prisma.session.findUnique({ where: { id: auth.sessionId }, select: { expiresAt: true } }),
+      openLeadCounts(this.prisma, auth.workspaceId),
+    ]);
+    return {
+      user: toUserView(user, counts.get(user.id) ?? 0),
+      workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug, timeZone: workspace.timeZone, currency: workspace.currency },
+      permissions: auth.baseLevel === 'USER' ? [...auth.permissions] : Object.keys(PERMISSIONS),
+      expiresAt: session?.expiresAt ?? null,
+    };
+  }
+
+  /** Public: who an invite is for, so the page can greet them (F1.2). */
+  async inviteInfo(token: string) {
+    const user = await this.findInvite(token);
+    const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: user.workspaceId } });
+    return { email: user.email, firstName: user.firstName, lastName: user.lastName, workspaceName: workspace.name };
+  }
+
+  /** Accepting an invite sets the member's own password, consumes the token and signs them in. */
+  async acceptInvite(token: string, input: { name?: string; password: string }, meta: RequestMeta) {
+    const user = await this.findInvite(token);
+    const [firstName, ...rest] = (input.name ?? '').trim().split(/\s+/).filter(Boolean);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          passwordHash: await argon2.hash(input.password, ARGON2_OPTIONS),
+          inviteTokenHash: null,
+          inviteExpiresAt: null,
+          ...(firstName ? { firstName, lastName: rest.join(' ') || user.lastName } : {}),
+        },
+      });
+      await this.audit.recordTx(tx, { workspaceId: user.workspaceId, actorId: user.id, actorLabel: user.email, action: 'user.invite_accepted', targetType: 'user', targetId: user.id, after: { email: user.email } });
+    });
+    const session = await this.createSession(user.id, meta);
+    const workspace = await this.prisma.workspace.findUniqueOrThrow({ where: { id: user.workspaceId } });
+    return { token: session.token, expiresAt: session.expiresAt, user: this.publicUser(user), workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug } };
+  }
+
+  private async findInvite(token: string) {
+    const user = await this.prisma.user.findUnique({ where: { inviteTokenHash: hashToken(token) } });
+    if (!user || !user.isActive || !user.inviteExpiresAt || user.inviteExpiresAt < new Date()) {
+      throw new UnauthorizedException({ code: 'INVITE_INVALID', message: 'This invite link is invalid or has expired.', action: 'Ask your workspace Owner or Admin to send a new invite.' });
+    }
+    return user;
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string, sessionId: string) {

@@ -23,13 +23,14 @@ export class ZodValidationPipe implements PipeTransform {
 }
 
 /**
- * Creates a class carrying a static `zodSchema` the pipe reads.
- *   const CreateLeadDto = zodDto(createLeadSchema);
- *   create(@Body() body: InstanceType<typeof CreateLeadDto>) {}
+ * Base class carrying a static `zodSchema` the pipe reads. Declare DTOs as classes so decorator metadata
+ * points at them (a type alias such as InstanceType<typeof X> erases to Object and skips validation):
+ *   class CreateLeadDto extends zodDto(createLeadSchema) {}
+ *   create(@Body() body: CreateLeadDto) {}
  */
-export function zodDto<TSchema extends ZodType>(schema: TSchema) {
+export function zodDto<TSchema extends ZodType>(schema: TSchema): { new (): ZodInfer<TSchema>; zodSchema: TSchema } {
   class ZodDtoClass {
     static readonly zodSchema = schema;
   }
-  return ZodDtoClass as typeof ZodDtoClass & { new (): ZodInfer<TSchema> };
+  return ZodDtoClass as unknown as { new (): ZodInfer<TSchema>; zodSchema: TSchema };
 }

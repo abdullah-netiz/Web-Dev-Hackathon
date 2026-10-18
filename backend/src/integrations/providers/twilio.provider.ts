@@ -67,3 +67,18 @@ function explainTwilio(code: number | undefined, fallback?: string): string {
       return fallback ? `Twilio: ${fallback}` : 'Twilio could not send the message.';
   }
 }
+
+/** Confirms the Account SID and Auth Token work (GET /Accounts/{sid}); used by "Test connection" (I5.1). */
+export async function verifyTwilioAccount(accountSid: string, authToken: string): Promise<{ friendlyName: string; status: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}.json`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}` },
+    });
+  } catch (error) {
+    throw new ProviderError('TWILIO', 'NETWORK', `Twilio could not be reached: ${(error as Error).message}`, true);
+  }
+  const body = (await response.json().catch(() => ({}))) as { friendly_name?: string; status?: string; message?: string; code?: number };
+  if (!response.ok) throw new ProviderError('TWILIO', String(body.code ?? response.status), response.status === 401 ? 'Twilio rejected the Account SID or Auth Token.' : `Twilio: ${body.message ?? response.statusText}`, response.status >= 500);
+  return { friendlyName: body.friendly_name ?? accountSid, status: body.status ?? 'unknown' };
+}

@@ -15,6 +15,7 @@ import { ConnectionsService } from './connections.service';
 import { InboundProcessor } from './inbound.processor';
 import { IntegrationEventsService } from './integration-events.service';
 import { IntegrationsController } from './integrations.controller';
+import { IntegrationTestService } from './integration-test.service';
 import { AlertsProcessor, OutboundProcessor, PaymentsProcessor } from './outbound.processors';
 import { GoogleCalendarProvider } from './providers/google-calendar.provider';
 import { LemonSqueezyProvider } from './providers/lemonsqueezy.provider';
@@ -32,6 +33,7 @@ import { WebhooksController } from './webhooks.controller';
   providers: [
     ConnectionsService,
     IntegrationEventsService,
+    IntegrationTestService,
     TwilioProvider,
     LemonSqueezyProvider,
     SlackProvider,

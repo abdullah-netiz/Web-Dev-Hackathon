@@ -3,7 +3,7 @@ import type { ActivityEntity, Prisma } from '@prisma/client';
 
 import { DomainEvents } from '../common/domain-events';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 
 type Tx = Prisma.TransactionClient | PrismaService;
 
@@ -36,7 +36,7 @@ export class ActivitiesService {
       where: { workspaceId, entityType, entityId, ...cursorWhere(pagination.cursor) },
       include: { actor: { select: { id: true, firstName: true, lastName: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: pagination.limit + 1,
+      skip: skipFor(pagination), take: pagination.limit + 1,
     });
     return pageResult(rows, pagination.limit);
   }
@@ -59,7 +59,7 @@ export class ActivitiesService {
       },
       include: { actor: { select: { id: true, firstName: true, lastName: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: pagination.limit + 1,
+      skip: skipFor(pagination), take: pagination.limit + 1,
     });
     return pageResult(rows, pagination.limit);
   }

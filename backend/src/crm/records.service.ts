@@ -6,7 +6,7 @@ import { actorLabel, hasPermission, type AuthContext } from '../auth/auth.types'
 import { DomainEvents } from '../common/domain-events';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { ActivitiesService } from './activities.service';
 import { CustomFieldsService } from './custom-fields.service';
@@ -46,7 +46,7 @@ export class RecordsService {
   async listCompanies(auth: AuthContext, query: Pagination & { filters?: Filters }) {
     const where: Prisma.CompanyWhereInput = { workspaceId: auth.workspaceId, ...compileFilters(query.filters, ['name', 'domain']), ...cursorWhere(query.cursor) };
     const [rows, total] = await Promise.all([
-      this.prisma.company.findMany({ where, include: { owner: { select: { id: true, firstName: true, lastName: true } }, _count: { select: { contacts: true, opportunities: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 }),
+      this.prisma.company.findMany({ where, include: { owner: { select: { id: true, firstName: true, lastName: true } }, _count: { select: { contacts: true, opportunities: { where: { stage: { isWon: false, isLost: false } } } } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 }),
       this.prisma.company.count({ where: { workspaceId: auth.workspaceId, ...compileFilters(query.filters, ['name', 'domain']) } }),
     ]);
     return pageResult(rows, query.limit, total);
@@ -59,16 +59,16 @@ export class RecordsService {
     return { ...company, opportunities: this.maskValues(auth, opportunities) };
   }
 
-  async createCompany(auth: AuthContext, input: { name: string; domain?: string; ownerId?: string | null; custom?: Record<string, unknown> }) {
+  async createCompany(auth: AuthContext, input: { name: string; domain?: string; industry?: string; city?: string; ownerId?: string | null; custom?: Record<string, unknown> }) {
     const custom = await this.customFields.validateCustom(auth.workspaceId, 'COMPANY', input.custom ?? {});
     return this.prisma.$transaction(async (tx) => {
-      const company = await tx.company.create({ data: { workspaceId: auth.workspaceId, name: input.name, domain: input.domain, ownerId: input.ownerId ?? auth.userId, custom: custom as Prisma.InputJsonValue } });
+      const company = await tx.company.create({ data: { workspaceId: auth.workspaceId, name: input.name, domain: input.domain, industry: input.industry, city: input.city, ownerId: input.ownerId ?? auth.userId, custom: custom as Prisma.InputJsonValue } });
       await this.activities.logTx(tx, { workspaceId: auth.workspaceId, entityType: 'COMPANY', entityId: company.id, type: 'created', actorId: auth.userId });
       return company;
     });
   }
 
-  async updateCompany(auth: AuthContext, id: string, input: Partial<{ name: string; domain: string | null; ownerId: string | null; custom: Record<string, unknown>; version: number }>) {
+  async updateCompany(auth: AuthContext, id: string, input: Partial<{ name: string; domain: string | null; industry: string | null; city: string | null; ownerId: string | null; custom: Record<string, unknown>; version: number }>) {
     const before = await this.prisma.company.findFirst({ where: { id, workspaceId: auth.workspaceId } });
     if (!before) throw new NotFoundException({ code: 'COMPANY_NOT_FOUND', message: 'Company not found.' });
     const custom = input.custom ? await this.customFields.validateCustom(auth.workspaceId, 'COMPANY', input.custom, { existing: before.custom as Record<string, unknown> }) : undefined;
@@ -98,10 +98,16 @@ export class RecordsService {
   async listContacts(auth: AuthContext, query: Pagination & { filters?: Filters }) {
     const base: Prisma.ContactWhereInput = { workspaceId: auth.workspaceId, ...compileFilters(query.filters, ['firstName', 'lastName', 'email', 'phone']) };
     const [rows, total] = await Promise.all([
-      this.prisma.contact.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: CONTACT_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 }),
+      this.prisma.contact.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: CONTACT_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 }),
       this.prisma.contact.count({ where: base }),
     ]);
     return pageResult(rows, query.limit, total);
+  }
+
+  /** Every tag in use, for the filter picker (F2.6). */
+  async contactTags(auth: AuthContext): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ tag: string }[]>`SELECT DISTINCT unnest("tags") AS tag FROM "Contact" WHERE "workspaceId" = ${auth.workspaceId} ORDER BY 1`;
+    return rows.map((row) => row.tag);
   }
 
   async getContact(auth: AuthContext, id: string) {
@@ -206,7 +212,7 @@ export class RecordsService {
   async listOpportunities(auth: AuthContext, query: Pagination & { filters?: Filters; pipelineId?: string }) {
     const base: Prisma.OpportunityWhereInput = { workspaceId: auth.workspaceId, ...(query.pipelineId ? { pipelineId: query.pipelineId } : {}), ...compileFilters(query.filters, ['name']) };
     const [rows, total] = await Promise.all([
-      this.prisma.opportunity.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: OPPORTUNITY_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 }),
+      this.prisma.opportunity.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: OPPORTUNITY_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 }),
       this.prisma.opportunity.count({ where: base }),
     ]);
     const page = pageResult(rows, query.limit, total);

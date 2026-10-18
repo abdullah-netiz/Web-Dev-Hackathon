@@ -21,6 +21,15 @@ export class PipelinesService {
     });
   }
 
+  async rename(auth: AuthContext, pipelineId: string, name: string) {
+    const before = await this.getPipeline(auth.workspaceId, pipelineId);
+    return this.prisma.$transaction(async (tx) => {
+      const pipeline = await tx.pipeline.update({ where: { id: pipelineId }, data: { name, version: { increment: 1 } }, include: { stages: { orderBy: { order: 'asc' } } } });
+      await this.audit.recordTx(tx, { workspaceId: auth.workspaceId, actorId: auth.userId, actorLabel: actorLabel(auth), action: 'pipeline.renamed', targetType: 'pipeline', targetId: pipelineId, before: { name: before.name }, after: { name } });
+      return pipeline;
+    });
+  }
+
   async create(auth: AuthContext, input: { name: string; stages?: string[] }) {
     return this.prisma.$transaction(async (tx) => {
       const pipeline = await tx.pipeline.create({ data: { workspaceId: auth.workspaceId, name: input.name } });

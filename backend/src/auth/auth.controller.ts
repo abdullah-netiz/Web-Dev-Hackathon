@@ -12,7 +12,7 @@ import { PERMISSIONS } from './permissions';
 
 const password = z.string().min(8, 'Use at least 8 characters').max(128);
 
-const SignupDto = zodDto(
+class SignupDto extends zodDto(
   z.object({
     workspaceName: z.string().trim().min(2).max(80),
     firstName: z.string().trim().min(1).max(60),
@@ -21,9 +21,10 @@ const SignupDto = zodDto(
     password,
     timeZone: z.string().max(60).optional(),
   }),
-);
-const LoginDto = zodDto(z.object({ email: z.string().trim().email(), password: z.string().min(1) }));
-const ChangePasswordDto = zodDto(z.object({ currentPassword: z.string().min(1), newPassword: password }));
+) {}
+class LoginDto extends zodDto(z.object({ email: z.string().trim().email(), password: z.string().min(1) })) {}
+class ChangePasswordDto extends zodDto(z.object({ currentPassword: z.string().min(1), newPassword: password })) {}
+class AcceptInviteDto extends zodDto(z.object({ name: z.string().trim().max(120).optional(), password })) {}
 
 @Controller('auth')
 export class AuthController {
@@ -35,7 +36,7 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('signup')
-  async signup(@Body() body: InstanceType<typeof SignupDto>, @Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+  async signup(@Body() body: SignupDto, @Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     const result = await this.auth.signup(body, meta(req));
     this.setCookie(reply, result.token, result.expiresAt);
     return { data: result };
@@ -45,7 +46,7 @@ export class AuthController {
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000, blockDuration: 60_000 } })
   @Post('login')
-  async login(@Body() body: InstanceType<typeof LoginDto>, @Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+  async login(@Body() body: LoginDto, @Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     const result = await this.auth.login(body, meta(req));
     this.setCookie(reply, result.token, result.expiresAt);
     return { data: result };
@@ -58,21 +59,26 @@ export class AuthController {
     return { data: { loggedOut: true } };
   }
 
+  /** `{ user, workspace, permissions, expiresAt }` — the user has the same shape as GET /users. */
   @Get('me')
   @SkipThrottle()
-  me(@CurrentUser() auth: AuthContext) {
-    return {
-      data: {
-        userId: auth.userId,
-        workspaceId: auth.workspaceId,
-        email: auth.email,
-        name: auth.name,
-        baseLevel: auth.baseLevel,
-        roleName: auth.roleName,
-        // Effective permissions: Owner/Admin hold every permission (F1.2)
-        permissions: auth.baseLevel === 'USER' ? [...auth.permissions] : Object.keys(PERMISSIONS),
-      },
-    };
+  async me(@CurrentUser() auth: AuthContext) {
+    return { data: await this.auth.sessionView(auth) };
+  }
+
+  @Public()
+  @Get('invites/:token')
+  async invite(@Param('token') token: string) {
+    return { data: await this.auth.inviteInfo(token) };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('invites/:token/accept')
+  async acceptInvite(@Param('token') token: string, @Body() body: AcceptInviteDto, @Req() req: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    const result = await this.auth.acceptInvite(token, body, meta(req));
+    this.setCookie(reply, result.token, result.expiresAt);
+    return { data: result };
   }
 
   @Get('sessions')
@@ -92,7 +98,7 @@ export class AuthController {
   }
 
   @Post('change-password')
-  async changePassword(@CurrentUser() auth: AuthContext, @Body() body: InstanceType<typeof ChangePasswordDto>) {
+  async changePassword(@CurrentUser() auth: AuthContext, @Body() body: ChangePasswordDto) {
     await this.auth.changePassword(auth.userId, body.currentPassword, body.newPassword, auth.sessionId);
     return { data: { changed: true } };
   }

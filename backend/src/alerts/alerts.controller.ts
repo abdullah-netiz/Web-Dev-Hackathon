@@ -7,13 +7,13 @@ import { paginationSchema } from '../common/pagination';
 import { zodDto } from '../common/zod-validation.pipe';
 import { AlertsService } from './alerts.service';
 
-const ListDto = zodDto(paginationSchema.extend({ status: z.enum(['PENDING', 'SENT', 'FAILED']).optional() }));
-const LinkDto = zodDto(
+class ListDto extends zodDto(paginationSchema.extend({ status: z.enum(['PENDING', 'SENT', 'FAILED']).optional() })) {}
+class LinkDto extends zodDto(
   z.object({
     slackUserId: z.string().trim().regex(/^[UW][A-Z0-9]{6,}$/, 'Slack member IDs look like U0123ABCD').optional(),
     userId: z.string().uuid().optional(),
   }),
-);
+) {}
 
 @Controller('alerts')
 export class AlertsController {
@@ -21,7 +21,7 @@ export class AlertsController {
 
   /** I4.3: set the Slack destination. Empty body = find the Slack member by the user's email. Sends a test DM. */
   @Put('slack/link')
-  async link(@CurrentUser() auth: AuthContext, @Body() body: InstanceType<typeof LinkDto>) {
+  async link(@CurrentUser() auth: AuthContext, @Body() body: LinkDto) {
     return { data: await this.alerts.link(auth, body) };
   }
 
@@ -37,7 +37,7 @@ export class AlertsController {
 
   /** I4.4: delivery attempts; Admins see everyone's, others their own. */
   @Get()
-  list(@CurrentUser() auth: AuthContext, @Query() query: InstanceType<typeof ListDto>) {
+  list(@CurrentUser() auth: AuthContext, @Query() query: ListDto) {
     return this.alerts.list(auth, query);
   }
 }

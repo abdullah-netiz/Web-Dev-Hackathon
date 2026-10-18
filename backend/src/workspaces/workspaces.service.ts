@@ -1,34 +1,17 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Availability, BaseLevel, Prisma } from '@prisma/client';
 
 import { AuditService } from '../audit/audit.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, hashToken } from '../auth/auth.service';
 import { actorLabel, type AuthContext } from '../auth/auth.types';
 import { isManagerRole, type Permission } from '../auth/permissions';
 import { DomainEvents } from '../common/domain-events';
+import { ENV, type Env } from '../common/env';
 import { randomToken } from '../common/encryption';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
-
-const USER_SELECT = {
-  id: true,
-  email: true,
-  firstName: true,
-  lastName: true,
-  baseLevel: true,
-  roleId: true,
-  role: { select: { id: true, name: true, permissions: true } },
-  availability: true,
-  maxOpenLeads: true,
-  backupUserId: true,
-  timeZone: true,
-  isActive: true,
-  slackUserId: true,
-  lastAssignedAt: true,
-  version: true,
-  createdAt: true,
-} satisfies Prisma.UserSelect;
+import { openLeadCounts, toUserView, USER_SELECT, type SelectedUser } from './user-view';
 
 export type WorkspaceSettingsInput = Partial<{
   name: string;
@@ -50,6 +33,7 @@ export class WorkspacesService {
     private readonly authService: AuthService,
     private readonly events: DomainEvents,
     private readonly realtime: RealtimeGateway,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   // ── Workspace & settings ──
@@ -85,7 +69,8 @@ export class WorkspacesService {
       select: USER_SELECT,
       orderBy: [{ baseLevel: 'asc' }, { firstName: 'asc' }],
     });
-    return users.map((user) => this.decorate(user));
+    const counts = await openLeadCounts(this.prisma, workspaceId);
+    return users.map((user) => toUserView(user, counts.get(user.id) ?? 0));
   }
 
   async getUser(workspaceId: string, userId: string) {
@@ -94,16 +79,19 @@ export class WorkspacesService {
     return this.decorate(user);
   }
 
-  /** Owner/Admin invite a user. Returns a temporary password once; the user changes it after first login. */
+  /**
+   * Owner/Admin invite a user (F1.2). The invitee gets a one-time link valid for 7 days where they choose
+   * their own password; until then the account has an unusable random password.
+   */
   async inviteUser(auth: AuthContext, input: { email: string; firstName: string; lastName: string; baseLevel?: BaseLevel; roleId?: string | null; timeZone?: string }) {
     this.assertCanAssignLevel(auth, input.baseLevel ?? 'USER');
     const email = input.email.toLowerCase();
     if (await this.prisma.user.findUnique({ where: { email } })) {
-      throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'A user with this email already exists.' });
+      throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'A user with this email already exists.', action: 'Use another email, or reactivate the existing member.' });
     }
     if (input.roleId) await this.assertRoleInWorkspace(auth.workspaceId, input.roleId);
-    const temporaryPassword = `Tmp-${randomToken(6)}`;
-    const passwordHash = await this.authService.hashPassword(temporaryPassword);
+    const passwordHash = await this.authService.hashPassword(randomToken(24));
+    const inviteToken = randomToken(24);
 
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -117,6 +105,8 @@ export class WorkspacesService {
           roleId: input.roleId ?? null,
           timeZone: input.timeZone ?? 'UTC',
           availability: 'OFFLINE',
+          inviteTokenHash: hashToken(inviteToken),
+          inviteExpiresAt: new Date(Date.now() + 7 * 86_400_000),
         },
         select: USER_SELECT,
       });
@@ -131,17 +121,17 @@ export class WorkspacesService {
       });
       return created;
     });
-    return { user: this.decorate(user), temporaryPassword };
+    return { user: toUserView(user), inviteUrl: `${this.env.APP_URL.replace(/\/$/, '')}/invite/${inviteToken}` };
   }
 
   async updateUser(
     auth: AuthContext,
     userId: string,
-    input: Partial<{ firstName: string; lastName: string; baseLevel: BaseLevel; roleId: string | null; maxOpenLeads: number | null; backupUserId: string | null; timeZone: string; version: number }>,
+    input: Partial<{ firstName: string; lastName: string; baseLevel: BaseLevel; roleId: string | null; maxOpenLeads: number | null; backupUserId: string | null; isEscalationManager: boolean; timeZone: string; version: number }>,
   ) {
     const target = await this.getUser(auth.workspaceId, userId);
     const isSelf = auth.userId === userId;
-    const changesPrivileges = input.baseLevel !== undefined || input.roleId !== undefined || input.maxOpenLeads !== undefined || input.backupUserId !== undefined;
+    const changesPrivileges = input.baseLevel !== undefined || input.roleId !== undefined || input.maxOpenLeads !== undefined || input.backupUserId !== undefined || input.isEscalationManager !== undefined;
 
     // F1.2: an Admin cannot modify the Owner; only the Owner can change base levels.
     if (target.baseLevel === 'OWNER' && !isSelf) throw new ForbiddenException({ code: 'OWNER_PROTECTED', message: 'The Owner can only be modified by themselves.' });
@@ -156,7 +146,10 @@ export class WorkspacesService {
       throw new ForbiddenException({ code: 'PERMISSION_DENIED', message: 'You can only edit your own profile.' });
     }
     if (input.roleId) await this.assertRoleInWorkspace(auth.workspaceId, input.roleId);
-    if (input.backupUserId) await this.getUser(auth.workspaceId, input.backupUserId);
+    if (input.backupUserId) {
+      if (input.backupUserId === userId) throw new DomainError('INVALID_BACKUP', 'An employee cannot be their own backup.', 422);
+      await this.getUser(auth.workspaceId, input.backupUserId);
+    }
 
     const { version, ...data } = input;
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -174,8 +167,8 @@ export class WorkspacesService {
           action: 'user.privileges_updated',
           targetType: 'user',
           targetId: userId,
-          before: { baseLevel: target.baseLevel, roleId: target.roleId, maxOpenLeads: target.maxOpenLeads, backupUserId: target.backupUserId },
-          after: { baseLevel: after.baseLevel, roleId: after.roleId, maxOpenLeads: after.maxOpenLeads, backupUserId: after.backupUserId },
+          before: { baseLevel: target.baseLevel, roleId: target.roleId, maxOpenLeads: target.maxOpenLeads, backupUserId: target.backupUserId, isEscalationManager: target.isEscalationManager },
+          after: { baseLevel: after.baseLevel, roleId: after.roleId, maxOpenLeads: after.maxOpenLeads, backupUserId: after.backupUserId, isEscalationManager: after.isEscalationManager },
         });
       }
       return after;
@@ -232,6 +225,17 @@ export class WorkspacesService {
     this.realtime.toWorkspace(auth.workspaceId, 'availability:changed', { userId, availability: 'OFFLINE' });
     this.events.emit('user.deactivated', { workspaceId: auth.workspaceId, userId, actorId: auth.userId });
     return { deactivated: true };
+  }
+
+  async reactivateUser(auth: AuthContext, userId: string) {
+    const target = await this.getUser(auth.workspaceId, userId);
+    if (target.isActive) return target;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({ where: { id: userId }, data: { isActive: true }, select: USER_SELECT });
+      await this.audit.recordTx(tx, { workspaceId: auth.workspaceId, actorId: auth.userId, actorLabel: actorLabel(auth), action: 'user.reactivated', targetType: 'user', targetId: userId, before: { isActive: false }, after: { isActive: true } });
+      return user;
+    });
+    return this.decorate(updated);
   }
 
   // ── Roles ──
@@ -317,8 +321,16 @@ export class WorkspacesService {
     return role;
   }
 
-  private decorate<T extends { role: { permissions: string[] } | null; slackUserId: string | null }>(user: T) {
-    return { ...user, isManager: user.role ? isManagerRole(user.role.permissions) : false, slackLinked: Boolean(user.slackUserId) };
+  private decorate(user: SelectedUser) {
+    return toUserView(user);
+  }
+
+  /** Single user with the live open-lead count. */
+  async view(workspaceId: string, userId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, workspaceId }, select: USER_SELECT });
+    if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND', message: 'User not found.' });
+    const counts = await openLeadCounts(this.prisma, workspaceId);
+    return toUserView(user, counts.get(userId) ?? 0);
   }
 }
 

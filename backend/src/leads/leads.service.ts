@@ -11,7 +11,7 @@ import { isManagerRole } from '../auth/permissions';
 import { DomainEvents } from '../common/domain-events';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 import { ActivitiesService } from '../crm/activities.service';
 import { compileFilters, type Filters } from '../crm/list-filters';
 import { RecordsService } from '../crm/records.service';
@@ -367,7 +367,7 @@ export class LeadsService implements OnModuleInit {
       ...compileFilters(query.filters, ['title']),
     };
     const [rows, total] = await Promise.all([
-      this.prisma.lead.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: LEAD_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 }),
+      this.prisma.lead.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, include: LEAD_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 }),
       this.prisma.lead.count({ where: base }),
     ]);
     return pageResult(rows, query.limit, total);
@@ -378,7 +378,7 @@ export class LeadsService implements OnModuleInit {
     const scopeToSelf = !hasPermission(auth, 'leads.view_all');
     const where: Prisma.LeadWhereInput = { workspaceId: auth.workspaceId, recoveryReason: { not: 'NONE' }, status: { not: 'CLOSED' }, ...(scopeToSelf ? { currentAssigneeId: auth.userId } : {}) };
     const [rows, total, byReason] = await Promise.all([
-      this.prisma.lead.findMany({ where: { ...where, ...cursorWhere(pagination.cursor) }, include: LEAD_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: pagination.limit + 1 }),
+      this.prisma.lead.findMany({ where: { ...where, ...cursorWhere(pagination.cursor) }, include: LEAD_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(pagination), take: pagination.limit + 1 }),
       this.prisma.lead.count({ where }),
       this.prisma.lead.groupBy({ by: ['recoveryReason'], where, _count: { _all: true } }),
     ]);
@@ -411,7 +411,7 @@ export class LeadsService implements OnModuleInit {
       maxOpenLeads: user.maxOpenLeads,
       openLeadCount: openCount.get(user.id) ?? 0,
       backupUserId: user.backupUserId,
-      isManager: user.baseLevel !== 'USER' ? user.baseLevel === 'ADMIN' : isManagerRole(user.role?.permissions ?? []),
+      isManager: user.isEscalationManager || (user.baseLevel !== 'USER' ? user.baseLevel === 'ADMIN' : isManagerRole(user.role?.permissions ?? [])),
       lastAssignedAt: user.lastAssignedAt,
     }));
   }

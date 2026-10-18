@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 
 export type AuditInput = {
   workspaceId: string;
@@ -45,16 +45,20 @@ export class AuditService {
   }
 
   async list(workspaceId: string, query: Pagination & { action?: string; actorId?: string; targetType?: string; from?: string; to?: string }) {
-    const where: Prisma.AuditEventWhereInput = {
+    // `action` accepts a comma-separated list of exact actions or prefixes (e.g. "role.,user.privileges_updated")
+    const actions = (query.action ?? '').split(',').map((a) => a.trim()).filter(Boolean);
+    const base: Prisma.AuditEventWhereInput = {
       workspaceId,
-      ...(query.action ? { action: { startsWith: query.action } } : {}),
+      ...(actions.length ? { OR: actions.map((action) => ({ action: { startsWith: action } })) } : {}),
       ...(query.actorId ? { actorId: query.actorId } : {}),
       ...(query.targetType ? { targetType: query.targetType } : {}),
       ...(query.from || query.to ? { createdAt: { gte: query.from ? new Date(query.from) : undefined, lte: query.to ? new Date(query.to) : undefined } } : {}),
-      ...cursorWhere(query.cursor),
     };
-    const rows = await this.prisma.auditEvent.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
-    return pageResult(rows, query.limit);
+    const [rows, total] = await Promise.all([
+      this.prisma.auditEvent.findMany({ where: { ...base, ...cursorWhere(query.cursor) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 }),
+      this.prisma.auditEvent.count({ where: base }),
+    ]);
+    return pageResult(rows, query.limit, total);
   }
 
   async actions(workspaceId: string) {

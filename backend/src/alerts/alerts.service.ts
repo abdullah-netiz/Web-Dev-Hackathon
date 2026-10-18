@@ -6,7 +6,7 @@ import { actorLabel, hasPermission, type AuthContext } from '../auth/auth.types'
 import { ENV, type Env } from '../common/env';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 import { ConnectionsService } from '../integrations/connections.service';
 import { IntegrationEventsService } from '../integrations/integration-events.service';
 import { SlackProvider } from '../integrations/providers/slack.provider';
@@ -158,7 +158,7 @@ export class AlertsService {
       ...(hasPermission(auth, 'integrations.view') ? {} : { userId: auth.userId }),
       ...cursorWhere(query.cursor),
     };
-    const rows = await this.prisma.alertDelivery.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true } }, lead: { select: { id: true, title: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
+    const rows = await this.prisma.alertDelivery.findMany({ where, include: { user: { select: { id: true, firstName: true, lastName: true } }, lead: { select: { id: true, title: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 });
     return pageResult(rows, query.limit);
   }
 

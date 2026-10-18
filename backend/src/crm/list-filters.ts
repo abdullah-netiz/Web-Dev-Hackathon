@@ -49,12 +49,14 @@ type Where = Record<string, unknown>;
 export function compileFilters(filters: Filters | undefined, searchFields: string[]): Where {
   if (!filters) return {};
   const parts = filters.criteria.map(compileCriterion).filter((part): part is Where => Boolean(part));
-  const where: Where = parts.length ? (filters.logic === 'OR' ? { OR: parts } : { AND: parts }) : {};
+  // Always a single AND list so it can be spread next to permission ORs and cursor NOTs without clobbering them
+  const and: Where[] = [];
+  if (parts.length) and.push(filters.logic === 'OR' ? { OR: parts } : { AND: parts });
   if (filters.search?.trim()) {
     const term = filters.search.trim();
-    where.AND = [...((where.AND as Where[] | undefined) ?? []), { OR: searchFields.map((field) => ({ [field]: { contains: term, mode: 'insensitive' } })) }];
+    and.push({ OR: searchFields.map((field) => ({ [field]: { contains: term, mode: 'insensitive' } })) });
   }
-  return where;
+  return and.length ? { AND: and } : {};
 }
 
 function compileCriterion(criterion: Criterion): Where | null {

@@ -7,7 +7,7 @@ import { actorLabel, hasPermission, type AuthContext } from '../auth/auth.types'
 import { ENV, type Env } from '../common/env';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 import { ActivitiesService } from '../crm/activities.service';
 import { RecordsService } from '../crm/records.service';
 import { ConnectionsService, type TwilioCredentials } from '../integrations/connections.service';
@@ -196,7 +196,7 @@ export class MessagingService {
       where,
       include: { contact: { select: { id: true, firstName: true, lastName: true, phone: true, optedOut: true } }, assignee: { select: { id: true, firstName: true, lastName: true } }, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: pagination.limit + 1,
+      skip: skipFor(pagination), take: pagination.limit + 1,
     });
     const now = new Date();
     return pageResult(
@@ -228,7 +228,7 @@ export class MessagingService {
       where: { conversationId, ...cursorWhere(pagination.cursor) },
       include: { sentBy: { select: { id: true, firstName: true, lastName: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: pagination.limit + 1,
+      skip: skipFor(pagination), take: pagination.limit + 1,
     });
     await this.prisma.conversation.update({ where: { id: conversationId }, data: { unreadCount: 0 } });
     return pageResult(rows, pagination.limit);

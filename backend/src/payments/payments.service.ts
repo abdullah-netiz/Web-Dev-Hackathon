@@ -9,7 +9,7 @@ import { DomainEvents } from '../common/domain-events';
 import { ENV, type Env } from '../common/env';
 import { DomainError } from '../common/http-exception.filter';
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 import { ActivitiesService } from '../crm/activities.service';
 import { ConnectionsService } from '../integrations/connections.service';
 import { IntegrationEventsService } from '../integrations/integration-events.service';
@@ -180,7 +180,7 @@ export class PaymentsService implements OnApplicationBootstrap {
       ...(hasPermission(auth, 'leads.view_all') ? {} : { requestedById: auth.userId }),
       ...cursorWhere(query.cursor),
     };
-    const rows = await this.prisma.payment.findMany({ where, include: PAYMENT_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
+    const rows = await this.prisma.payment.findMany({ where, include: PAYMENT_INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 });
     const page = pageResult(rows, query.limit);
     return { ...page, data: page.data.map((row) => this.mask(auth, row)) };
   }

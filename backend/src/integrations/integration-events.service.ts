@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, Provider } from '@prisma/client';
 
 import { PrismaService } from '../common/prisma.service';
-import { cursorWhere, pageResult, type Pagination } from '../common/pagination';
+import { cursorWhere, pageResult, type Pagination, skipFor } from '../common/pagination';
 
 export type RecordEventInput = {
   workspaceId?: string | null;
@@ -82,7 +82,7 @@ export class IntegrationEventsService {
       ...(query.status ? { status: query.status } : {}),
       ...cursorWhere(query.cursor),
     };
-    const rows = await this.prisma.integrationEvent.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: query.limit + 1 });
+    const rows = await this.prisma.integrationEvent.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(query), take: query.limit + 1 });
     return pageResult(rows, query.limit);
   }
 }

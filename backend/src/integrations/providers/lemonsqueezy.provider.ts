@@ -91,3 +91,22 @@ function explain(status: number, detail: string): string {
       return `Lemon Squeezy error (${status}): ${detail}`;
   }
 }
+
+/** Confirms the API key can read the store and the variant exists; used by "Test connection" (I5.1). */
+export async function verifyLemonSqueezyStore(credentials: LemonSqueezyCredentials): Promise<{ storeName: string; currency: string; testMode: boolean }> {
+  const headers = { Accept: 'application/vnd.api+json', Authorization: `Bearer ${credentials.apiKey}` };
+  const get = async (path: string) => {
+    let response: Response;
+    try {
+      response = await fetch(`https://api.lemonsqueezy.com/v1/${path}`, { headers });
+    } catch (error) {
+      throw new ProviderError('LEMONSQUEEZY', 'NETWORK', `Lemon Squeezy could not be reached: ${(error as Error).message}`, true);
+    }
+    const json = (await response.json().catch(() => ({}))) as { data?: { attributes?: Record<string, unknown> }; errors?: { detail?: string }[] };
+    if (!response.ok) throw new ProviderError('LEMONSQUEEZY', String(response.status), explain(response.status, json.errors?.map((e) => e.detail).join('; ') ?? response.statusText), response.status >= 500);
+    return json.data?.attributes ?? {};
+  };
+  const store = await get(`stores/${encodeURIComponent(credentials.storeId)}`);
+  const variant = await get(`variants/${encodeURIComponent(credentials.variantId)}`);
+  return { storeName: String(store.name ?? credentials.storeId), currency: String(store.currency ?? 'USD'), testMode: Boolean(variant.test_mode ?? true) };
+}
