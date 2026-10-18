@@ -15,3 +15,7 @@ export const versionSchema = z.coerce.number().int().positive();
 export const idParamSchema = z.object({ id: z.string().min(1).max(40) });
 
 export const tagsSchema = z.array(z.string().min(1).max(40)).max(20).default([]);
+
+export function optionalEmail(max = 200) {
+  return z.preprocess((value) => (value === '' ? undefined : value), z.email().max(max).optional());
+}
