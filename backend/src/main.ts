@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
@@ -12,6 +13,7 @@ async function bootstrap(): Promise<void> {
     { rawBody: true, bufferLogs: true },
   );
   app.useLogger(app.get(Logger));
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
   const config = app.get(ConfigService);

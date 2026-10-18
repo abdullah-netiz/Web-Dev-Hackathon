@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { Queue } from 'bullmq';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../common/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AssignmentService } from './assignment.service';
 import { ESCALATION_JOB, LEADS_QUEUE, escalationJobId } from './leads.constants';
 import { LeadsRepository } from './leads.repository';
@@ -14,6 +15,9 @@ export interface EscalationResult {
   status: EscalationOutcomeStatus;
   toUserId?: string;
   level?: number;
+  leadId?: string;
+  workspaceId?: string;
+  leadName?: string;
 }
 
 interface ExpiryWork {
@@ -33,6 +37,7 @@ export class EscalationService {
     private readonly assignment: AssignmentService,
     private readonly audit: AuditService,
     private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
     @InjectQueue(LEADS_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -57,7 +62,29 @@ export class EscalationService {
     if (work.enqueue) {
       await this.enqueue(work.enqueue.leadId, work.enqueue.assignmentId, work.enqueue.dueAt);
     }
+    this.publish(work.outcome);
     return work.outcome;
+  }
+
+  /** Pushes the outcome to the workspace room so the UI updates without a refresh (Q11). */
+  private publish(outcome: EscalationResult): void {
+    if (!outcome.workspaceId || !outcome.leadId) {
+      return;
+    }
+    if (outcome.status === 'escalated') {
+      this.realtime.emitLead(outcome.workspaceId, 'lead.escalated', {
+        id: outcome.leadId,
+        name: outcome.leadName,
+        status: 'ASSIGNED',
+        ownerId: outcome.toUserId,
+        reason: `Escalated to level ${outcome.level}`,
+      });
+    } else if (outcome.status === 'recovered') {
+      this.realtime.emitLead(outcome.workspaceId, 'lead.recovered', {
+        id: outcome.leadId,
+        name: outcome.leadName,
+      });
+    }
   }
 
   private async expireAndEscalate(
@@ -99,7 +126,14 @@ export class EscalationService {
         },
         tx,
       );
-      return { outcome: { status: 'recovered' } };
+      return {
+        outcome: {
+          status: 'recovered',
+          leadId: lead.id,
+          workspaceId: lead.workspaceId,
+          leadName: lead.name,
+        },
+      };
     }
 
     const managerStep = nextLevel >= settings.escalationLevels;
@@ -129,7 +163,14 @@ export class EscalationService {
         },
         tx,
       );
-      return { outcome: { status: 'recovered' } };
+      return {
+        outcome: {
+          status: 'recovered',
+          leadId: lead.id,
+          workspaceId: lead.workspaceId,
+          leadName: lead.name,
+        },
+      };
     }
 
     const dueAt = new Date(Date.now() + settings.ackWindowSec * 1000);
@@ -169,7 +210,14 @@ export class EscalationService {
     );
 
     return {
-      outcome: { status: 'escalated', toUserId: target.id, level: nextLevel },
+      outcome: {
+        status: 'escalated',
+        toUserId: target.id,
+        level: nextLevel,
+        leadId: lead.id,
+        workspaceId: lead.workspaceId,
+        leadName: lead.name,
+      },
       enqueue: { leadId: lead.id, assignmentId: created.id, dueAt },
     };
   }

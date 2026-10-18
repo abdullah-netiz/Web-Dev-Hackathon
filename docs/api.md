@@ -338,6 +338,29 @@ keyset-paginated. There is no update or delete route; the DB also rejects them.
   "meta": { "nextCursor": null, "hasMore": false } }
 ```
 
+## Real-time events — Socket.IO (Q11)
+
+Connect with `transports: ['websocket']` and pass the session token as the handshake
+`auth` (or an `Authorization: Bearer` header). An unauthenticated or expired handshake is
+disconnected immediately. Each socket joins two rooms: `user:<userId>` and
+`ws:<workspaceId>`.
+
+```js
+const socket = io(API_URL, { transports: ['websocket'], auth: { token } });
+```
+
+| Event | Payload | Room |
+|---|---|---|
+| `lead.created` | `{ id, name, source, status, ownerId, at }` | `ws:<workspaceId>` |
+| `lead.assigned` | `{ id, name, status, ownerId, at }` | workspace + `user:<newOwnerId>` |
+| `lead.acknowledged` | `{ id, name, status, ownerId, at }` | workspace |
+| `lead.escalated` | `{ id, name, status, ownerId, reason, at }` | workspace + `user:<newOwnerId>` |
+| `lead.recovered` | `{ id, name }` | workspace |
+| `lead.closed` | `{ id, name, status }` | workspace |
+
+Events are workspace-scoped: a socket never receives another workspace's data (F1.6).
+Use them to invalidate the matching TanStack Query keys rather than polling.
+
 ## Seed data (for frontend development)
 
 `pnpm db:seed` creates workspace slug `demo`:
@@ -353,5 +376,5 @@ Seeded: 5 companies, 10 contacts, 12 opportunities across 5 pipeline stages, 4 l
 
 ## Planned next (not yet implemented)
 
-`/integrations` (Twilio WhatsApp, Stripe, Google Calendar, Telegram) and the Socket.IO
-real-time channel (Q11). Each will follow the same envelope, pagination and error shape.
+`/integrations` (Twilio WhatsApp, Stripe, Google Calendar, Telegram). Each will follow the
+same envelope, pagination, error shape and real-time notifications.

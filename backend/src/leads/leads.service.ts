@@ -4,6 +4,7 @@ import type { SessionUser } from '../auth/types/session-user';
 import { businessRule, forbidden, notFound, versionConflict } from '../common/http-errors';
 import { keysetArgs, type ListQuery } from '../common/pagination';
 import { PrismaService } from '../common/prisma.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { AssignmentService } from './assignment.service';
 import { EscalationService } from './escalation.service';
 import type {
@@ -19,6 +20,7 @@ interface Enqueue {
   leadId: string;
   assignmentId: string;
   dueAt: Date;
+  ownerId?: string | null;
 }
 
 @Injectable()
@@ -29,6 +31,7 @@ export class LeadsService {
     private readonly escalation: EscalationService,
     private readonly audit: AuditService,
     private readonly prisma: PrismaService,
+    private readonly realtime: RealtimeService,
   ) {}
 
   async intake(workspaceSlug: string, input: PublicIntakeInput, ip?: string) {
@@ -101,7 +104,7 @@ export class LeadsService {
 
       const target = explicitOwner ?? (await this.assignment.pickNext(workspaceId, {}, tx));
       if (!target) {
-        return { leadId: created.id, enqueue: null };
+        return { leadId: created.id, ownerId: null, enqueue: null };
       }
 
       const settings = await this.repository.ensureSettings(workspaceId, tx);
@@ -141,7 +144,13 @@ export class LeadsService {
       );
       return {
         leadId: created.id,
-        enqueue: { leadId: created.id, assignmentId: row.id, dueAt } satisfies Enqueue,
+        ownerId: target.id,
+        enqueue: {
+          leadId: created.id,
+          assignmentId: row.id,
+          dueAt,
+          ownerId: target.id,
+        } satisfies Enqueue,
       };
     });
 
@@ -152,7 +161,15 @@ export class LeadsService {
         result.enqueue.dueAt,
       );
     }
-    return (await this.get(workspaceId, result.leadId))!;
+    const lead = (await this.get(workspaceId, result.leadId))!;
+    this.realtime.emitLead(workspaceId, 'lead.created', {
+      id: lead.id,
+      name: lead.name,
+      source: lead.source,
+      status: lead.status,
+      ownerId: result.ownerId,
+    });
+    return lead;
   }
 
   async list(
@@ -259,7 +276,14 @@ export class LeadsService {
         tx,
       );
     });
-    return this.get(actor.workspaceId, id);
+    const acknowledged = (await this.get(actor.workspaceId, id))!;
+    this.realtime.emitLead(actor.workspaceId, 'lead.acknowledged', {
+      id: acknowledged.id,
+      name: acknowledged.name,
+      status: acknowledged.status,
+      ownerId: actor.id,
+    });
+    return acknowledged;
   }
 
   async assign(actor: SessionUser, id: string, ownerId: string, ip?: string) {
@@ -311,11 +335,18 @@ export class LeadsService {
         },
         tx,
       );
-      return { leadId: id, assignmentId: row.id, dueAt } satisfies Enqueue;
+      return { leadId: id, assignmentId: row.id, dueAt, ownerId: target.id } satisfies Enqueue;
     });
 
     await this.escalation.enqueue(enqueue.leadId, enqueue.assignmentId, enqueue.dueAt);
-    return this.get(actor.workspaceId, id);
+    const reassigned = (await this.get(actor.workspaceId, id))!;
+    this.realtime.emitLead(actor.workspaceId, 'lead.assigned', {
+      id: reassigned.id,
+      name: reassigned.name,
+      status: reassigned.status,
+      ownerId: enqueue.ownerId,
+    });
+    return reassigned;
   }
 
   async close(actor: SessionUser, id: string, ip?: string) {
@@ -346,7 +377,13 @@ export class LeadsService {
         tx,
       );
     });
-    return this.get(actor.workspaceId, id);
+    const closed = (await this.get(actor.workspaceId, id))!;
+    this.realtime.emitLead(actor.workspaceId, 'lead.closed', {
+      id: closed.id,
+      name: closed.name,
+      status: closed.status,
+    });
+    return closed;
   }
 
   async recovery(workspaceId: string) {
@@ -469,10 +506,19 @@ export class LeadsService {
           },
           tx,
         );
-        return { leadId: item.leadId, assignmentId: row.id, dueAt } satisfies Enqueue;
+        return { leadId: item.leadId, assignmentId: row.id, dueAt, ownerId: target.id } satisfies Enqueue;
       });
       if (enqueue) {
         await this.escalation.enqueue(enqueue.leadId, enqueue.assignmentId, enqueue.dueAt);
+        const lead = await this.get(workspaceId, enqueue.leadId);
+        if (lead) {
+          this.realtime.emitLead(workspaceId, 'lead.assigned', {
+            id: lead.id,
+            name: lead.name,
+            status: lead.status,
+            ownerId: enqueue.ownerId,
+          });
+        }
       }
     }
   }
