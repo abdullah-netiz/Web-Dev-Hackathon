@@ -237,6 +237,42 @@ Setting a member to `ON_LEAVE` or `OFFLINE` immediately reassigns their unacknow
 leads to someone available (F3.6); acknowledged leads are kept. Members who are not
 `AVAILABLE` never receive new leads (F3.3).
 
+## Dashboard — `/dashboard` (F5, Section 7)
+
+Every figure is computed from one definition in `backend/src/metrics/definitions.ts`, so
+the dashboard, lists and exports cannot disagree (F5.2). Each widget returns its label,
+unit, value and a `drilldown` (`{ route, query }`) the UI can navigate to (F5.3).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/dashboard` | all figures; `?widgets=a,b` to fetch a subset |
+| `GET` | `/dashboard/widgets` | the widget catalogue (key, label, definition, unit, personal) |
+| `GET` | `/dashboard/prefs` | the caller's remembered visible figures (F5.5) |
+| `PATCH` | `/dashboard/prefs` | `{ "widgets": ["leads_new_today", …] }` — unknown keys are ignored |
+
+All require `dashboard.view`. Figures are **role-aware** (F5.4): an `USER` gets personal
+figures (`scope: "personal"` — own leads, own response time, own appointments), while
+`OWNER`/`ADMIN` get company-wide figures. Money figures (`pipeline_value_by_stage`,
+`payments_this_month`) are `redacted: true` with `value: null` for callers lacking
+`crm.view_values`.
+
+```jsonc
+{
+  "data": {
+    "scope": "workspace",
+    "canSeeValues": true,
+    "generatedAt": "…",
+    "widgets": [
+      { "key": "recovery_queue", "label": "Recovery queue", "unit": "count",
+        "scope": "workspace", "value": 2, "drilldown": { "route": "/leads/recovery", "query": {} } }
+    ]
+  }
+}
+```
+
+Widget keys: `leads_new_today`, `avg_first_response`, `recovery_queue`, `escalations_24h`,
+`pipeline_value_by_stage`, `team_availability`, `upcoming_appointments`, `payments_this_month`.
+
 ## Audit — `/audit` (F4)
 
 `GET /audit` (requires `audit.view`) returns the append-only history, newest first,
@@ -263,5 +299,5 @@ Seeded: 5 companies, 10 contacts, 12 opportunities across 5 pipeline stages, 4 l
 
 ## Planned next (not yet implemented)
 
-`/workspaces`, `/roles`, `/dashboard`, `/integrations`. Each will follow the same
-envelope, pagination and error shape.
+`/workspaces`, `/roles`, `/integrations`. Each will follow the same envelope, pagination
+and error shape.
