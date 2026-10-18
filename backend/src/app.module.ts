@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { validateEnv } from './config/env';
 import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.module';
+import { CrmModule } from './crm/crm.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { PrismaModule } from './common/prisma.module';
 import { JobsModule } from './jobs/jobs.module';
@@ -35,6 +36,7 @@ import { MetaController } from './meta/meta.controller';
     JobsModule,
     AuthModule,
     AuditModule,
+    CrmModule,
   ],
   controllers: [HealthController, MetaController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
