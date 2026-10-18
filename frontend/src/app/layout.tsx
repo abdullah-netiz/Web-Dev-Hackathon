@@ -21,6 +21,9 @@ const zodiak = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  openGraph: { siteName: "Baton", type: "website" },
+  twitter: { card: "summary_large_image" },
   title: {
     default: "Baton — every lead has one owner",
     template: "%s · Baton",

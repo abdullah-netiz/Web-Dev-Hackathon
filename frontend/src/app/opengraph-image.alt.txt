@@ -1,0 +1,1 @@
+﻿Baton: every lead gets an owner, instantly.

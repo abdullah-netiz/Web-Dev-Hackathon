@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 export function BatonMark({ className, handoff = false }: { className?: string; handoff?: boolean }) {
   return (
     <svg viewBox="0 0 32 32" className={cn("h-6 w-6", className)} aria-hidden>
-      <rect x="2" y="12" width="20" height="8" fill="currentColor" className={cn("transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]", handoff && "translate-x-[6px]")} />
-      <rect x="25" y="12" width="5" height="8" fill="currentColor" opacity="0.45" />
+      <rect x="1" y="11.5" width="19" height="9" rx="4.5" fill="currentColor" className={cn("transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]", handoff && "translate-x-[6px]")} />
+      <rect x="22" y="11.5" width="9" height="9" rx="4.5" fill="currentColor" opacity="0.45" />
     </svg>
   );
 }
