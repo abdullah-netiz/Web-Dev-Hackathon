@@ -54,7 +54,7 @@ export interface MockDB {
   invites: { token: string; userId: string; workspaceId: string }[];
 }
 
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 const STORAGE_KEY = "baton.mock.db";
 
 let seq = 0;
@@ -569,7 +569,7 @@ export function seed(): MockDB {
       lead.recoveryReason = escalationCount >= 2 ? "ESCALATED_TWICE" : "OVERDUE";
     }
     lead.current = { ...asg };
-    if (lead.status === "ACKNOWLEDGED" && createdMin > 60 * 24 * 2 && r() < 0.5) {
+    if (lead.status === "ACKNOWLEDGED" && createdMin > 60 * 24 * 2 && r() < 0.2) {
       lead.recoveryReason = "IDLE";
     } else if (lead.status === "ACKNOWLEDGED") {
       lead.lastActivityAt = iso(now - between(5, 50) * 60_000);

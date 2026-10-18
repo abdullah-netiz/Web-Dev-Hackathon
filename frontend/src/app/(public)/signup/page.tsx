@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { api, describeError } from "@/lib/api";
@@ -26,6 +27,10 @@ export default function SignupPage() {
   const router = useRouter();
   const setSession = useSetSession();
   const form = useForm<Values>({ resolver: zodResolver(schema), mode: "onTouched" });
+  useEffect(() => {
+    const company = new URLSearchParams(window.location.search).get("company");
+    if (company) form.setValue("workspaceName", company.slice(0, 60));
+  }, [form]);
   const signup = useMutation({
     mutationFn: (v: Values) => api().auth.signup(v),
     onSuccess: (s) => {

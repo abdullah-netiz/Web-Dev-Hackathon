@@ -384,6 +384,7 @@ export interface SavedList {
 }
 
 export interface StageValue {
+  pipelineName: string;
   stageId: ID;
   stageName: string;
   count: number;

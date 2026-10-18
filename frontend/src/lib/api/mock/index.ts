@@ -194,7 +194,7 @@ function computeMetrics(c: ReturnType<typeof ctx>): DashboardMetrics {
     openPipelineByStage: canValues
       ? openStages.map((s) => {
           const inStage = opps.filter((o) => o.stageId === s.id);
-          return { stageId: s.id, stageName: `${s.name}`, count: inStage.length, value: inStage.reduce((x, o) => x + (o.value ?? 0), 0) };
+          return { pipelineName: s.pipelineName, stageId: s.id, stageName: s.name, count: inStage.length, value: inStage.reduce((x, o) => x + (o.value ?? 0), 0) };
         })
       : null,
     avgTimeToFirstResponseSec: responded.length ? Math.round(responded.reduce((s, l) => s + l.timeToFirstResponseSec!, 0) / responded.length) : null,
@@ -1261,7 +1261,12 @@ export function createMockApi(): Api {
         return strip(conn) as never;
       },
       async googleConnectUrl() {
-        await wait(200);
+        await wait(600);
+        const c = ctx();
+        const before = c.user.calendarStatus;
+        c.user.calendarStatus = "CONNECTED";
+        audit(c.db, c.W, { action: "INTEGRATION_CHANGED", actorId: c.user.id, actorName: c.user.name, targetType: "calendar", targetId: c.user.id, targetLabel: `${c.user.name}'s Google Calendar`, before: { status: before }, after: { status: "CONNECTED" } });
+        persist();
         return { url: `/connect/google?status=connected` };
       },
       async disconnectGoogle() {

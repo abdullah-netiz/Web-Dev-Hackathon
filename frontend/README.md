@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Baton — frontend
 
-## Getting Started
-
-First, run the development server:
+Next.js 16 (App Router) · React 19 · Tailwind 4 · Radix · TanStack Query · react-hook-form + Zod · Motion · GSAP · Lenis.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev            # http://localhost:3000
+npm run build          # production build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Modes
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_API_MODE=mock` (default): the full app runs against an in-browser mock backend
+  (`src/lib/api/mock/`) with a seeded workspace, *Northwind Solar*, and a simulated lead engine (round-robin,
+  ack timers, escalation next → backup → manager, absence reassignment, recovery reasons, Telegram alert records).
+  Log in as `amina@northwind.test` (Owner), `sara@northwind.test` (Manager) or `bilal@northwind.test` (Sales),
+  password `demo1234`. The **Demo controls** button stands in for Twilio/Stripe/form webhooks.
+- `NEXT_PUBLIC_API_MODE=live`: `src/lib/api/http.ts` calls the backend. Routes there are a draft; align them with
+  `docs/api.md` when the backend publishes it. Every screen uses the `Api` interface in `src/lib/api/contract.ts`,
+  so only `http.ts` changes.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Layout
 
-## Learn More
+```
+src/app/(public)/   login, signup, invite, public lead form /f/[slug], Stripe return /pay/[result]
+src/app/(app)/      dashboard, leads, recovery, conversations, contacts, companies, opportunities,
+                    payments, appointments, team, audit, settings/*
+src/app/page.tsx    front door (Lenis + GSAP)
+src/components/     ui/ (primitives), app/ (shell, realtime), leads/, crm/, activity/, brand/, landing/
+src/lib/api/        types, contract, http client, mock backend
+```
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See `docs/frontend-plan.md` for the route → requirement map.
