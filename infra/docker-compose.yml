@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ubmp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ubmp
+      POSTGRES_PASSWORD: ubmp
+      POSTGRES_DB: ubmp
+    ports:
+      # 5433 on the host avoids clashing with any local Postgres on 5432.
+      - '5433:5432'
+    volumes:
+      - ubmp-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ubmp -d ubmp']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ubmp-redis
+    restart: unless-stopped
+    # noeviction + AOF keep delayed escalation jobs alive across restarts (Q5).
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '6380:6379'
+    volumes:
+      - ubmp-redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ubmp-postgres:
+  ubmp-redis:

@@ -1,0 +1,61 @@
+{
+  "name": "backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unified Business Management Platform API — CRM, lead engine, audit, metrics and integrations.",
+  "main": "dist/main.js",
+  "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "scripts": {
+    "dev": "nest start -b swc -w",
+    "build": "nest build -b swc",
+    "start": "node dist/main",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "seed": "prisma db seed"
+  },
+  "dependencies": {
+    "@nestjs/bullmq": "^12.0.0",
+    "@nestjs/common": "^11.2.6",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.2.6",
+    "@nestjs/platform-fastify": "^11.2.6",
+    "@nestjs/platform-socket.io": "^11.2.6",
+    "@nestjs/throttler": "^6.7.1",
+    "@nestjs/websockets": "^11.2.6",
+    "@prisma/client": "^6.0.0",
+    "argon2": "^0.45.1",
+    "bullmq": "^5.81.5",
+    "googleapis": "^186.0.0",
+    "nestjs-pino": "^5.3.0",
+    "pino": "^10.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.4",
+    "stripe": "^23.0.0",
+    "twilio": "^6.0.0",
+    "zod": "^4.6.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@swc/cli": "^0.7.0",
+    "@swc/core": "^1.13.0",
+    "@types/node": "^22.0.0",
+    "prisma": "^6.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,9 @@
+# Supply-chain safety: only trusted toolchain packages may run install scripts (pnpm 11 gate).
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@swc/core': true
+  argon2: true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
