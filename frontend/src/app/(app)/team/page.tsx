@@ -82,7 +82,7 @@ export default function TeamPage() {
           {active.map((u, i) => {
             const limit = u.maxOpenLeads ?? limitDefault;
             const full = u.openLeadCount >= limit;
-            const editable = u.id === me.user.id || can("members.manage");
+            const editable = u.id === me.user.id || can("users.manage");
             const backup = u.backupUserId ? byId.get(u.backupUserId) : null;
             return (
               <motion.li
@@ -132,10 +132,10 @@ export default function TeamPage() {
                       </Tag>
                     </span>
                   </Tooltip>
-                  <Tooltip content={u.telegramLinked ? "Gets escalation alerts in Telegram" : "Won't get escalation alerts until they link Telegram"}>
+                  <Tooltip content={u.slackLinked ? "Gets escalation alerts in Slack" : "Gets alerts in Slack only if their Slack email matches; otherwise they link it in Profile"}>
                     <span tabIndex={0}>
-                      <Tag tone={u.telegramLinked ? "ok" : "off"} shape={u.telegramLinked ? "check" : "ring"}>
-                        Telegram{u.telegramLinked ? "" : ": not linked"}
+                      <Tag tone={u.slackLinked ? "ok" : "off"} shape={u.slackLinked ? "check" : "ring"}>
+                        Slack{u.slackLinked ? "" : ": not linked"}
                       </Tag>
                     </span>
                   </Tooltip>

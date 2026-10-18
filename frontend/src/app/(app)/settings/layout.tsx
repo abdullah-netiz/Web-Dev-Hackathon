@@ -11,11 +11,11 @@ import { EmptyState } from "@/components/ui/misc";
 const ITEMS: { href: string; label: string; perm?: Permission }[] = [
   { href: "/settings/profile", label: "Profile and alerts" },
   { href: "/settings/workspace", label: "Workspace and lead form" },
-  { href: "/settings/members", label: "Members", perm: "members.manage" },
+  { href: "/settings/members", label: "Members", perm: "users.manage" },
   { href: "/settings/roles", label: "Roles and permissions", perm: "roles.manage" },
-  { href: "/settings/assignment", label: "Assignment rules", perm: "assignment.manage" },
-  { href: "/settings/pipelines", label: "Pipelines and stages", perm: "pipelines.manage" },
-  { href: "/settings/fields", label: "Custom fields", perm: "pipelines.manage" },
+  { href: "/settings/assignment", label: "Assignment rules", perm: "leads.manage_rules" },
+  { href: "/settings/pipelines", label: "Pipelines and stages", perm: "settings.manage" },
+  { href: "/settings/fields", label: "Custom fields", perm: "settings.manage" },
   { href: "/settings/integrations", label: "Integrations", perm: "integrations.manage" },
 ];
 

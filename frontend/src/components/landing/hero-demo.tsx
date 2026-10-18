@@ -196,7 +196,7 @@ export function HeroDemo() {
             className="absolute right-2 -bottom-10 w-64 rounded-[10px] bg-ink p-3.5 text-paper shadow-[0_24px_48px_-16px_rgba(0,0,0,0.5)] sm:-right-8"
           >
             <p className="flex items-center gap-1.5 text-[11px] font-semibold text-[#9cc5c0]">
-              <PaperPlaneTiltIcon size={12} weight="fill" aria-hidden /> Telegram · Baton bot
+              <PaperPlaneTiltIcon size={12} weight="fill" aria-hidden /> Slack · Baton
             </p>
             <p className="mt-1 text-[13px] font-semibold">{toast}</p>
             <p className="mt-0.5 text-[12px] text-paper/70">Bilal didn&apos;t reply in 90 s. You have 60 s.</p>

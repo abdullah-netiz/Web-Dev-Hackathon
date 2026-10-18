@@ -318,7 +318,7 @@ export function createMockApi(): Api {
           maxOpenLeads: null,
           isManager: true,
           backupUserId: null,
-          telegramLinked: false,
+          slackLinked: false, slackUserId: null,
           calendarStatus: "NOT_CONNECTED",
           timeZone: ws.timeZone,
           lastAssignedAt: null,
@@ -374,7 +374,7 @@ export function createMockApi(): Api {
       async updateSettings(patch) {
         await wait();
         const c = ctx();
-        c.need("assignment.manage", "change assignment rules");
+        c.need("leads.manage_rules", "change assignment rules");
         const before = structuredClone(c.db.settings[c.W]!);
         for (const [k, v] of Object.entries(patch)) {
           if (typeof v === "number" && (!Number.isFinite(v) || v < 1)) fail(422, "VALIDATION", `${k} must be a positive number.`, "Enter a whole number of 1 or more.");
@@ -395,7 +395,7 @@ export function createMockApi(): Api {
       async invite({ email, name, baseLevel, roleId }) {
         await wait();
         const c = ctx();
-        c.need("members.manage", "invite members");
+        c.need("users.manage", "invite members");
         if (baseLevel === "OWNER") fail(422, "VALIDATION", "A workspace has one Owner.", "Invite them as Admin or User.");
         if (c.db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) fail(409, "EMAIL_TAKEN", "Someone with this email already has an account.", "Use a different email.");
         const role = c.db.roles.find((r) => r.id === roleId && r.workspaceId === c.W);
@@ -403,7 +403,7 @@ export function createMockApi(): Api {
         const id = uid("usr");
         c.db.users.push({
           id, workspaceId: c.W, name, email, password: uid("pw"), baseLevel, roleId, roleName: role.name, availability: "OFFLINE",
-          openLeadCount: 0, maxOpenLeads: null, isManager: false, backupUserId: null, telegramLinked: false,
+          openLeadCount: 0, maxOpenLeads: null, isManager: false, backupUserId: null, slackLinked: false, slackUserId: null,
           calendarStatus: "NOT_CONNECTED", timeZone: c.ws.timeZone, lastAssignedAt: null, active: true,
         });
         const token = uid("inv");
@@ -418,7 +418,7 @@ export function createMockApi(): Api {
         const target = c.db.users.find((u) => u.id === id && u.workspaceId === c.W);
         if (!target) fail(404, "NOT_FOUND", "This member doesn't exist in your workspace.");
         const selfServe = id === c.user.id && Object.keys(patch).every((k) => k === "maxOpenLeads");
-        if (!selfServe) c.need("members.manage", "change members");
+        if (!selfServe) c.need("users.manage", "change members");
         if (target.baseLevel === "OWNER" && c.user.baseLevel !== "OWNER") fail(403, "OWNER_PROTECTED", "Only the Owner can change the Owner's account.", "Ask the Owner to make this change.");
         if (patch.baseLevel === "OWNER") fail(422, "VALIDATION", "Ownership can't be assigned here.", "The Owner can transfer ownership from their profile.");
         if (patch.baseLevel && target.id === c.user.id) fail(422, "VALIDATION", "You can't change your own level.", "Ask another Admin or the Owner.");
@@ -446,7 +446,7 @@ export function createMockApi(): Api {
         const c = ctx();
         const target = c.db.users.find((u) => u.id === id && u.workspaceId === c.W);
         if (!target) fail(404, "NOT_FOUND", "This member doesn't exist in your workspace.");
-        if (id !== c.user.id) c.need("members.manage", "change someone else's availability");
+        if (id !== c.user.id) c.need("users.manage", "change someone else's availability");
         const before = target.availability;
         target.availability = availability;
         audit(c.db, c.W, { action: "SETTINGS_CHANGED", actorId: c.user.id, actorName: c.user.name, targetType: "availability", targetId: id, targetLabel: target.name, before: { availability: before }, after: { availability } });
@@ -456,10 +456,20 @@ export function createMockApi(): Api {
         emit(c.W, { type: "availability:changed", user: publicUser(target) });
         return publicUser(target);
       },
+      async reactivate(id) {
+        await wait();
+        const c = ctx();
+        c.need("users.manage", "reactivate members");
+        const target = c.db.users.find((u) => u.id === id && u.workspaceId === c.W);
+        if (!target) fail(404, "NOT_FOUND", "This member doesn't exist in your workspace.");
+        target.active = true;
+        persist();
+        return publicUser(target);
+      },
       async deactivate(id) {
         await wait();
         const c = ctx();
-        c.need("members.manage", "deactivate members");
+        c.need("users.manage", "deactivate members");
         const target = c.db.users.find((u) => u.id === id && u.workspaceId === c.W);
         if (!target) fail(404, "NOT_FOUND", "This member doesn't exist in your workspace.");
         if (target.baseLevel === "OWNER") fail(403, "OWNER_PROTECTED", "The Owner can't be deactivated.");
@@ -702,7 +712,7 @@ export function createMockApi(): Api {
       async create(name) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "create pipelines");
+        c.need("settings.manage", "create pipelines");
         const id = uid("pipe");
         const p = { id, workspaceId: c.W, name, stages: ["New", "In progress", "Won", "Lost"].map((n, i) => ({ id: uid("stage"), pipelineId: id, name: n, order: i, isWon: n === "Won", isLost: n === "Lost", requiredFieldKeys: [] as string[] })) };
         c.db.pipelines.push(p);
@@ -713,7 +723,7 @@ export function createMockApi(): Api {
       async rename(id, name) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "rename pipelines");
+        c.need("settings.manage", "rename pipelines");
         const p = c.db.pipelines.find((x) => x.id === id && x.workspaceId === c.W);
         if (!p) fail(404, "NOT_FOUND", "This pipeline doesn't exist.");
         audit(c.db, c.W, { action: "PIPELINE_CHANGED", actorId: c.user.id, actorName: c.user.name, targetType: "pipeline", targetId: id, targetLabel: name, before: { name: p.name }, after: { name } });
@@ -724,7 +734,7 @@ export function createMockApi(): Api {
       async addStage(pipelineId, name) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "add stages");
+        c.need("settings.manage", "add stages");
         const p = c.db.pipelines.find((x) => x.id === pipelineId && x.workspaceId === c.W);
         if (!p) fail(404, "NOT_FOUND", "This pipeline doesn't exist.");
         if (p.stages.some((s) => s.name.toLowerCase() === name.toLowerCase())) fail(409, "DUPLICATE", "This pipeline already has a stage with that name.");
@@ -740,7 +750,7 @@ export function createMockApi(): Api {
       async updateStage(stageId, patch) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "edit stages");
+        c.need("settings.manage", "edit stages");
         const found = stageById(c.db, c.W, stageId);
         if (!found) fail(404, "NOT_FOUND", "This stage doesn't exist.");
         const before = structuredClone(found.stage);
@@ -752,7 +762,7 @@ export function createMockApi(): Api {
       async reorderStages(pipelineId, stageIds) {
         await wait(120);
         const c = ctx();
-        c.need("pipelines.manage", "reorder stages");
+        c.need("settings.manage", "reorder stages");
         const p = c.db.pipelines.find((x) => x.id === pipelineId && x.workspaceId === c.W);
         if (!p) fail(404, "NOT_FOUND", "This pipeline doesn't exist.");
         const before = [...p.stages].sort((a, b) => a.order - b.order).map((s) => s.name);
@@ -767,7 +777,7 @@ export function createMockApi(): Api {
       async deleteStage(stageId, moveToStageId) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "delete stages");
+        c.need("settings.manage", "delete stages");
         const found = stageById(c.db, c.W, stageId);
         if (!found) fail(404, "NOT_FOUND", "This stage doesn't exist.");
         const inStage = c.db.opportunities.filter((o) => o.workspaceId === c.W && o.stageId === stageId);
@@ -799,7 +809,7 @@ export function createMockApi(): Api {
       async create(input) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "create fields");
+        c.need("settings.manage", "create fields");
         const label = input.label.trim();
         if (!label) fail(422, "VALIDATION", "Give the field a name.");
         if (input.type === "SELECT" && !(input.options ?? []).filter(Boolean).length) fail(422, "VALIDATION", "A dropdown needs at least one option.", "Add the options, one per line.");
@@ -817,7 +827,7 @@ export function createMockApi(): Api {
       async update(id, patch) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "edit fields");
+        c.need("settings.manage", "edit fields");
         const f = c.db.fields.find((x) => x.id === id && x.workspaceId === c.W);
         if (!f) fail(404, "NOT_FOUND", "This field doesn't exist.");
         const before = { label: f.label, options: [...f.options] };
@@ -829,7 +839,7 @@ export function createMockApi(): Api {
       async archive(id) {
         await wait();
         const c = ctx();
-        c.need("pipelines.manage", "remove fields");
+        c.need("settings.manage", "remove fields");
         const f = c.db.fields.find((x) => x.id === id && x.workspaceId === c.W);
         if (!f) fail(404, "NOT_FOUND", "This field doesn't exist.");
         const usedBy = c.db.pipelines.flatMap((p) => p.stages).filter((s) => s.requiredFieldKeys.includes(f.key));
@@ -1114,17 +1124,17 @@ export function createMockApi(): Api {
         if (!o) fail(404, "NOT_FOUND", "This opportunity doesn't exist in your workspace.");
         if (!(amount > 0)) fail(422, "VALIDATION", "Enter an amount greater than zero.");
         if (amount > 999_999) fail(422, "VALIDATION", "Stripe test mode accepts up to 999,999 per payment.", "Split it into several requests.");
-        const stripe = c.db.connections.find((x) => x.workspaceId === c.W && x.provider === "STRIPE");
+        const stripe = c.db.connections.find((x) => x.workspaceId === c.W && x.provider === "LEMONSQUEEZY");
         if (stripe?.status !== "CONNECTED") fail(503, "PROVIDER_NOT_CONNECTED", "Stripe isn't connected for this workspace.", "An Admin can connect Stripe in Settings → Integrations.");
         const session = `cs_test_${uid("").slice(1)}`;
         const p = {
           id: uid("pay"), workspaceId: c.W, opportunityId: o.id, opportunityName: o.name, contactId: o.contactId, contactName: o.contactName,
           requestedById: c.user.id, requestedByName: c.user.name, amount: Math.round(amount * 100) / 100, currency, status: "PENDING" as const,
-          refundedAmount: 0, stripeSessionId: session, checkoutUrl: `https://checkout.stripe.com/c/pay/${session}`, createdAt: now(), paidAt: null,
+          refundedAmount: 0, providerReference: session, checkoutUrl: `https://checkout.stripe.com/c/pay/${session}`, createdAt: now(), paidAt: null,
         };
         c.db.payments.push(p);
         o.paymentStatus = "PENDING";
-        c.db.events.push({ id: uid("evt"), workspaceId: c.W, provider: "STRIPE", direction: "OUTBOUND", type: "checkout.session.create", status: "OK", reference: session, error: null, at: now() });
+        c.db.events.push({ id: uid("evt"), workspaceId: c.W, provider: "LEMONSQUEEZY", direction: "OUTBOUND", type: "checkout.session.create", status: "OK", reference: session, error: null, at: now() });
         activity(c.db, c.W, { entityType: "opportunity", entityId: o.id, type: "PAYMENT", actorId: c.user.id, actorName: c.user.name, summary: `Payment of ${amount} ${currency} requested` });
         activity(c.db, c.W, { entityType: "contact", entityId: o.contactId, type: "PAYMENT", actorId: c.user.id, actorName: c.user.name, summary: `Payment link created for "${o.name}"` });
         touchContact(c.db, c.W, o.contactId, c.user, "requested a payment");
@@ -1232,7 +1242,7 @@ export function createMockApi(): Api {
         const conn = c.db.connections.find((x) => x.workspaceId === c.W && x.provider === provider)!;
         const secret = Object.values(credentials).find((v) => v.length > 6) ?? "";
         if (!secret) fail(422, "VALIDATION", "Paste the credentials from the provider's dashboard.");
-        if (provider === "STRIPE" && !credentials.secretKey?.startsWith("sk_test_")) {
+        if (provider === "LEMONSQUEEZY" && !credentials.secretKey?.startsWith("sk_test_")) {
           fail(422, "LIVE_KEY_REJECTED", "Only Stripe test keys (sk_test_…) are accepted.", "Copy the secret key from Stripe's dashboard with Test mode switched on.");
         }
         const before = { status: conn.status };
@@ -1268,7 +1278,7 @@ export function createMockApi(): Api {
         conn.lastOkAt = now();
         c.db.events.push({ id: uid("evt"), workspaceId: c.W, provider, direction: "OUTBOUND", type: "health.check", status: "OK", reference: uid("chk"), error: null, at: now() });
         persist();
-        return strip(conn) as never;
+        return { ok: true, detail: "The provider answered." };
       },
       async googleConnectUrl() {
         await wait(600);
@@ -1287,11 +1297,20 @@ export function createMockApi(): Api {
         persist();
         return publicUser(c.user);
       },
-      async telegramLink() {
+      async slackLink(input) {
+        await wait(300);
+        const c = ctx();
+        c.user.slackLinked = true;
+        c.user.slackUserId = input?.slackUserId ?? `U${uid("").slice(0, 8).toUpperCase()}`;
+        persist();
+        return { linked: true, slackUserId: c.user.slackUserId };
+      },
+      async slackUnlink() {
         await wait(200);
         const c = ctx();
-        const code = uid("tg").slice(3, 13);
-        return { code, url: `https://t.me/northwind_baton_bot?start=${code}` };
+        c.user.slackLinked = false;
+        c.user.slackUserId = null;
+        persist();
       },
     },
 
@@ -1372,7 +1391,7 @@ export function createMockApi(): Api {
       async paymentStatus(sessionId) {
         await wait(300);
         const db = loadDB();
-        const p = db.payments.find((x) => x.stripeSessionId === sessionId);
+        const p = db.payments.find((x) => x.providerReference === sessionId);
         if (!p) fail(404, "NOT_FOUND", "We couldn't find this payment.");
         return { status: p.status, amount: p.amount, currency: p.currency, workspaceName: db.workspaces.find((w) => w.id === p.workspaceId)!.name };
       },
@@ -1483,7 +1502,7 @@ export const mockDemo = {
     const opp = db.opportunities.find((o) => o.id === target.opportunityId);
     if (opp) opp.paymentStatus = outcome;
     const type = { PAID: "checkout.session.completed", EXPIRED: "checkout.session.expired", FAILED: "checkout.session.async_payment_failed", REFUNDED: "charge.refunded" }[outcome];
-    db.events.push({ id: uid("evt"), workspaceId: W, provider: "STRIPE", direction: "INBOUND", type, status: "OK", reference: `evt_${uid("").slice(1)}`, error: null, at: now() });
+    db.events.push({ id: uid("evt"), workspaceId: W, provider: "LEMONSQUEEZY", direction: "INBOUND", type, status: "OK", reference: `evt_${uid("").slice(1)}`, error: null, at: now() });
     activity(db, W, { entityType: "opportunity", entityId: target.opportunityId, type: "PAYMENT", actorId: null, actorName: "Stripe", summary: `Payment ${outcome.toLowerCase()} (${target.amount} ${target.currency})` });
     activity(db, W, { entityType: "contact", entityId: target.contactId, type: "PAYMENT", actorId: null, actorName: "Stripe", summary: `Payment ${outcome.toLowerCase()} for "${target.opportunityName}"` });
     persist();

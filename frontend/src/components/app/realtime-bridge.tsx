@@ -73,6 +73,9 @@ export function RealtimeBridge() {
         case "integration:updated":
           invalidate("integrations");
           break;
+        case "refresh":
+          invalidate(...e.keys);
+          break;
       }
     });
   }, [qc, me.user.id, router]);

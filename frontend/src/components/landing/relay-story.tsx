@@ -37,7 +37,7 @@ const STEPS = [
   {
     kicker: "Hand-off",
     title: "Ignored? It moves on its own.",
-    body: "When the window runs out, the lead goes to the next available teammate, then the owner's designated backup, then a manager. Each new owner gets a Telegram message with a link straight to it.",
+    body: "When the window runs out, the lead goes to the next available teammate, then the owner's designated backup, then a manager. Each new owner gets a Slack message with a link straight to it.",
   },
   {
     kicker: "Recover",
@@ -192,7 +192,7 @@ function Visual({ step }: { step: number }) {
           className="relative mt-4 ml-auto w-[min(100%,300px)] rounded-[12px] bg-ink p-4 text-paper shadow-[0_24px_48px_-16px_rgba(0,0,0,0.5)] lg:absolute lg:-right-6 lg:-bottom-16 lg:mt-0"
         >
           <p className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[#9cc5c0]">
-            <PaperPlaneTiltIcon size={12} weight="fill" /> Telegram · to Priya
+            <PaperPlaneTiltIcon size={12} weight="fill" /> Slack · to Priya
           </p>
           <p className="mt-1 text-[14px] font-semibold">Escalated to you: Camila Ortiz</p>
           <p className="mt-0.5 text-[12.5px] text-paper/70">Web form · Bilal didn&apos;t reply in 90 s. Open the lead →</p>

@@ -25,7 +25,7 @@ function toFilters(f: FilterState): Filter[] {
   const out: Filter[] = [];
   if (f.ownerId) out.push({ field: "ownerId", op: "eq", value: f.ownerId });
   if (f.tag) out.push({ field: "tags", op: "contains", value: f.tag });
-  if (f.channel) out.push({ field: "custom.preferredChannel", op: "eq", value: f.channel });
+  if (f.channel) out.push({ field: "custom.preferred_channel", op: "eq", value: f.channel });
   if (f.createdFrom) out.push({ field: "createdAt", op: "gte", value: f.createdFrom });
   if (f.optedOut) out.push({ field: "optedOut", op: "isTrue" });
   return out;
@@ -36,7 +36,7 @@ function fromFilters(list: Filter[]): FilterState {
   for (const f of list) {
     if (f.field === "ownerId") s.ownerId = String(f.value ?? "");
     if (f.field === "tags") s.tag = String(f.value ?? "");
-    if (f.field === "custom.preferredChannel") s.channel = String(f.value ?? "");
+    if (f.field === "custom.preferred_channel") s.channel = String(f.value ?? "");
     if (f.field === "createdAt") s.createdFrom = String(f.value ?? "");
     if (f.field === "optedOut") s.optedOut = true;
   }

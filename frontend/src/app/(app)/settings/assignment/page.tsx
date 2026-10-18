@@ -95,7 +95,7 @@ export default function AssignmentPage() {
             ))}
           </ol>
           <figcaption className="mt-4 text-sm text-ink-soft">
-            If nobody responds, a lead reaches the last level after <span className="font-semibold text-ink">{formatDuration(total)}</span>. Each hand-off alerts the new owner in Telegram.
+            If nobody responds, a lead reaches the last level after <span className="font-semibold text-ink">{formatDuration(total)}</span>. Each hand-off alerts the new owner in Slack.
             After the last level it stays with the manager and enters the recovery queue.
           </figcaption>
         </figure>

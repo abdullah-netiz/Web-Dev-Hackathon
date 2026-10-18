@@ -88,7 +88,7 @@ export const CONNECTION_COPY: Record<IntegrationConnection["provider"], { canDo:
       "Send faster than about one message every 3 seconds in the sandbox.",
     ],
   },
-  STRIPE: {
+  LEMONSQUEEZY: {
     canDo: [
       "Create a hosted Checkout link for an opportunity in any supported currency.",
       "Mark payments paid, expired, failed or refunded from Stripe's signed webhooks.",
@@ -108,7 +108,7 @@ export const CONNECTION_COPY: Record<IntegrationConnection["provider"], { canDo:
       "Keep a connection longer than 7 days while the Google app is in testing; reconnect when asked.",
     ],
   },
-  TELEGRAM: {
+  SLACK: {
     canDo: [
       "Alert the new owner of an escalated lead in Telegram within seconds, with a link to the lead.",
       "Let each employee link their own chat from Settings → Notifications.",
@@ -203,7 +203,7 @@ function defaultPipeline(workspaceId: string): Scoped<Pipeline> {
 }
 
 function connectionsFor(workspaceId: string, connected: boolean): Scoped<IntegrationConnection>[] {
-  return (["TWILIO", "STRIPE", "GOOGLE", "TELEGRAM"] as const).map((provider) => ({
+  return (["TWILIO", "LEMONSQUEEZY", "GOOGLE", "SLACK"] as const).map((provider) => ({
     workspaceId,
     provider,
     status: connected ? "CONNECTED" : "NOT_CONNECTED",
@@ -334,7 +334,8 @@ export function seed(): MockDB {
       maxOpenLeads: null,
       isManager,
       backupUserId: null,
-      telegramLinked: handle !== "tomas" && handle !== "lucas",
+      slackLinked: handle !== "tomas" && handle !== "lucas",
+      slackUserId: handle !== "tomas" && handle !== "lucas" ? `U0${handle.toUpperCase()}` : null,
       calendarStatus: handle === "priya" ? "NEEDS_RECONNECT" : handle === "lucas" ? "NOT_CONNECTED" : "CONNECTED",
       timeZone: tz,
       lastAssignedAt: minutesAgo(between(30, 600)),
@@ -400,7 +401,7 @@ export function seed(): MockDB {
     pipelineId: string | null = null,
   ): Scoped<CustomField> => ({ id: `fld_${key}`, workspaceId: W, entity, key, label, type, options, pipelineId, isArchived: false, order });
   db.fields.push(
-    field("contact", "preferredChannel", "Preferred channel", "SELECT", 0, ["WhatsApp", "Phone", "Email"]),
+    field("contact", "preferred_channel", "Preferred channel", "SELECT", 0, ["WhatsApp", "Phone", "Email"]),
     field("contact", "homeowner", "Homeowner", "BOOLEAN", 1),
     field("contact", "referralSource", "Referred by", "TEXT", 2),
     field("opportunity", "roofType", "Roof type", "SELECT", 0, ["Asphalt shingle", "Metal", "Clay tile", "Flat"], resId),
@@ -449,7 +450,7 @@ export function seed(): MockDB {
       tags,
       optedOut: i === 7,
       custom: {
-        preferredChannel: pick(["WhatsApp", "Phone", "Email"]),
+        preferred_channel: pick(["WhatsApp", "Phone", "Email"]),
         homeowner: !company,
         referralSource: r() < 0.2 ? `${pick(FIRST)} ${pick(LAST)}` : null,
       },
@@ -740,7 +741,7 @@ export function seed(): MockDB {
       currency: "USD",
       status,
       refundedAmount: status === "REFUNDED" ? amount : status === "PARTIALLY_REFUNDED" ? Math.round(amount / 4) : 0,
-      stripeSessionId: `cs_test_${(i * 7919).toString(36).padStart(10, "a")}`,
+      providerReference: `cs_test_${(i * 7919).toString(36).padStart(10, "a")}`,
       checkoutUrl: status === "PENDING" ? `https://checkout.stripe.com/c/pay/cs_test_${i}` : null,
       createdAt: iso(created),
       paidAt: ["PAID", "REFUNDED", "PARTIALLY_REFUNDED"].includes(status) ? iso(created + 3_600_000) : null,
@@ -775,15 +776,15 @@ export function seed(): MockDB {
   const conns = connectionsFor(W, true);
   const mask: Record<string, string> = {
     TWILIO: "AC••••••••••••••••••••••••••7f2c",
-    STRIPE: "sk_test_••••••••••••••••4Qe1",
+    LEMONSQUEEZY: "sk_test_••••••••••••••••4Qe1",
     GOOGLE: "OAuth client ••••••.apps.googleusercontent.com",
-    TELEGRAM: "@northwind_baton_bot · token ••••••:AAH•••••••x9",
+    SLACK: "@northwind_baton_bot · token ••••••:AAH•••••••x9",
   };
   for (const c of conns) {
     c.maskedCredential = mask[c.provider]!;
     c.lastOkAt = minutesAgo(between(1, 40));
   }
-  const tg = conns.find((c) => c.provider === "TELEGRAM")!;
+  const tg = conns.find((c) => c.provider === "SLACK")!;
   tg.lastError = "Forbidden: bot was blocked by the user (Tomás Ferreira). Ask them to press Start in the bot again.";
   tg.lastErrorAt = minutesAgo(95);
   db.connections.push(...conns);
@@ -792,11 +793,11 @@ export function seed(): MockDB {
     ["TWILIO", "INBOUND", "message.received"],
     ["TWILIO", "OUTBOUND", "message.send"],
     ["TWILIO", "INBOUND", "message.status"],
-    ["STRIPE", "OUTBOUND", "checkout.session.create"],
-    ["STRIPE", "INBOUND", "checkout.session.completed"],
+    ["LEMONSQUEEZY", "OUTBOUND", "checkout.session.create"],
+    ["LEMONSQUEEZY", "INBOUND", "checkout.session.completed"],
     ["GOOGLE", "OUTBOUND", "events.insert"],
     ["GOOGLE", "OUTBOUND", "freebusy.query"],
-    ["TELEGRAM", "OUTBOUND", "sendMessage"],
+    ["SLACK", "OUTBOUND", "sendMessage"],
   ];
   for (let i = 0; i < 60; i++) {
     const [provider, direction, type] = evTypes[i % evTypes.length]!;
@@ -808,7 +809,7 @@ export function seed(): MockDB {
       direction,
       type,
       status: special,
-      reference: provider === "STRIPE" ? `evt_1Q${i}x${(i * 9973).toString(36)}` : provider === "TWILIO" ? `SM${(i * 7177).toString(16).padStart(32, "0")}` : provider === "GOOGLE" ? `gcal_${i}` : `tg_${1000 + i}`,
+      reference: provider === "LEMONSQUEEZY" ? `evt_1Q${i}x${(i * 9973).toString(36)}` : provider === "TWILIO" ? `SM${(i * 7177).toString(16).padStart(32, "0")}` : provider === "GOOGLE" ? `gcal_${i}` : `tg_${1000 + i}`,
       error:
         special === "REJECTED"
           ? "Signature check failed (X-Twilio-Signature did not match). Request ignored."
@@ -824,9 +825,9 @@ export function seed(): MockDB {
   }
 
   db.alerts.push(
-    { id: uid("alr"), workspaceId: W, leadId: "ld_5", leadLabel: db.leads[5]!.contactName, userId: "usr_sara", userName: "Sara Lindqvist", channel: "TELEGRAM", status: "SENT", attempts: 1, lastError: null, at: minutesAgo(50) },
-    { id: uid("alr"), workspaceId: W, leadId: "ld_9", leadLabel: db.leads[9]!.contactName, userId: "usr_tomas", userName: "Tomás Ferreira", channel: "TELEGRAM", status: "FAILED", attempts: 3, lastError: "403 Forbidden: bot was blocked by the user", at: minutesAgo(95) },
-    { id: uid("alr"), workspaceId: W, leadId: "ld_12", leadLabel: db.leads[12]!.contactName, userId: "usr_priya", userName: "Priya Nair", channel: "TELEGRAM", status: "SENT", attempts: 1, lastError: null, at: minutesAgo(180) },
+    { id: uid("alr"), workspaceId: W, leadId: "ld_5", leadLabel: db.leads[5]!.contactName, userId: "usr_sara", userName: "Sara Lindqvist", channel: "SLACK", status: "SENT", attempts: 1, lastError: null, at: minutesAgo(50) },
+    { id: uid("alr"), workspaceId: W, leadId: "ld_9", leadLabel: db.leads[9]!.contactName, userId: "usr_tomas", userName: "Tomás Ferreira", channel: "SLACK", status: "FAILED", attempts: 3, lastError: "403 Forbidden: bot was blocked by the user", at: minutesAgo(95) },
+    { id: uid("alr"), workspaceId: W, leadId: "ld_12", leadLabel: db.leads[12]!.contactName, userId: "usr_priya", userName: "Priya Nair", channel: "SLACK", status: "SENT", attempts: 1, lastError: null, at: minutesAgo(180) },
   );
 
   const admin = byHandle("amina");

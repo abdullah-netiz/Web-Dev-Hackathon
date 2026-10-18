@@ -23,7 +23,7 @@ export function AuthFrame({ title, intro, children, footer }: { title: string; i
         <p className="display max-w-[14ch] text-[64px] text-on-brand xl:text-[76px]">One lead. One owner. Always.</p>
         <RelayFigure />
         <p className="max-w-md text-[15px] leading-relaxed text-on-brand/75">
-          When nobody answers in time, Baton hands the lead to the next available teammate, then their backup, then a manager, and tells each of them in Telegram.
+          When nobody answers in time, Baton hands the lead to the next available teammate, then their backup, then a manager, and tells each of them in Slack.
         </p>
       </aside>
     </div>

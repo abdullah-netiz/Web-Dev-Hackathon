@@ -331,7 +331,7 @@ function Dashboard() {
                   value={formatMoney(m!.collectedThisMonth, m!.currency)}
                   note={
                     <>
-                      {m!.paymentsThisMonthCount} payments confirmed by Stripe, minus refunds.
+                      {m!.paymentsThisMonthCount} payments confirmed by Lemon Squeezy, minus refunds.
                       {m!.projectedRevenue != null && (
                         <span className="mt-1 block">
                           Projected, not yet collected: <span className="tabular font-semibold text-ink">{formatCompactMoney(m!.projectedRevenue, m!.currency)}</span>

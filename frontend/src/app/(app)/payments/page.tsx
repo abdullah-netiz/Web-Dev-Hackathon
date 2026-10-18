@@ -25,12 +25,12 @@ function Payments() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Payments" description="Payment requests sent through Stripe. Statuses change only when Stripe confirms them." />
+      <PageHeader title="Payments" description="Payment requests sent through Lemon Squeezy (test mode). Statuses change only when Lemon Squeezy confirms them by signed webhook." />
       <dl className="mb-8 grid gap-px bg-line sm:grid-cols-3">
         <div className="bg-paper p-5">
           <dt className="text-sm text-ink-soft">Collected this month</dt>
           <dd className="tabular mt-2 text-4xl font-semibold tracking-[-0.02em] text-ok">{formatMoney(collected)}</dd>
-          <dd className="mt-1 text-[13px] text-ink-soft">Confirmed by Stripe, minus refunds</dd>
+          <dd className="mt-1 text-[13px] text-ink-soft">Confirmed by Lemon Squeezy, minus refunds</dd>
         </div>
         <div className="bg-paper p-5">
           <dt className="text-sm text-ink-soft">Awaiting payment</dt>
@@ -40,7 +40,7 @@ function Payments() {
         <div className="bg-paper p-5">
           <dt className="text-sm text-ink-soft">Refunded, all time</dt>
           <dd className="tabular mt-2 text-4xl font-semibold tracking-[-0.02em] text-ink">{formatMoney(refunded)}</dd>
-          <dd className="mt-1 text-[13px] text-ink-soft">Refunds made in the Stripe dashboard show up here</dd>
+          <dd className="mt-1 text-[13px] text-ink-soft">Refunds made in the Lemon Squeezy dashboard show up here</dd>
         </div>
       </dl>
       <Tabs value={status} onValueChange={(v) => setStatus(v as PaymentStatus | "")} className="mb-4">
@@ -68,7 +68,7 @@ function Payments() {
                 <th scope="col" className="py-2.5 pr-4 font-medium">Status</th>
                 <th scope="col" className="py-2.5 pr-4 font-medium">Opportunity · contact</th>
                 <th scope="col" className="py-2.5 pr-4 font-medium">Requested by</th>
-                <th scope="col" className="py-2.5 font-medium">Stripe reference</th>
+                <th scope="col" className="py-2.5 font-medium">Provider reference</th>
               </tr>
             </thead>
             <tbody>
@@ -91,7 +91,7 @@ function Payments() {
                     </Link>
                   </td>
                   <td className="py-3 pr-4 text-ink">{p.requestedByName}</td>
-                  <td className="py-3 text-[13px] break-all text-ink-soft">{p.stripeSessionId}</td>
+                  <td className="py-3 text-[13px] break-all text-ink-soft">{p.providerReference}</td>
                 </tr>
               ))}
             </tbody>

@@ -85,6 +85,7 @@ export interface Api {
   members: {
     list(): Promise<User[]>;
     invite(input: { email: string; name: string; baseLevel: BaseLevel; roleId: ID }): Promise<{ user: User; inviteUrl: string }>;
+    reactivate(id: ID): Promise<User>;
     update(
       id: ID,
       patch: Partial<Pick<User, "baseLevel" | "roleId" | "maxOpenLeads" | "isManager" | "backupUserId">>,
@@ -200,12 +201,14 @@ export interface Api {
     list(): Promise<IntegrationConnection[]>;
     events(params?: { provider?: Provider }): Promise<IntegrationEvent[]>;
     alerts(): Promise<AlertDelivery[]>;
-    connect(provider: Provider, credentials: Record<string, string>): Promise<IntegrationConnection>;
+    connect(provider: Provider, credentials: Record<string, string>, config?: Record<string, string>): Promise<IntegrationConnection>;
     disconnect(provider: Provider): Promise<IntegrationConnection>;
-    test(provider: Provider): Promise<IntegrationConnection>;
+    test(provider: Provider): Promise<{ ok: boolean; detail: string }>;
     googleConnectUrl(): Promise<{ url: string }>;
     disconnectGoogle(): Promise<User>;
-    telegramLink(): Promise<{ code: string; url: string }>;
+    /** Empty input links by the user's email; otherwise uses the given Slack member ID (I4.3). */
+    slackLink(input?: { slackUserId?: string }): Promise<{ linked: boolean; slackUserId: string | null }>;
+    slackUnlink(): Promise<void>;
   };
   audit: {
     list(params: { action?: AuditAction; actorId?: ID; from?: string; to?: string; page?: number; pageSize?: number }): Promise<Page<AuditEvent>>;

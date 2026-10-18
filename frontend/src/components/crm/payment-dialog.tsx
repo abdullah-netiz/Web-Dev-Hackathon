@@ -45,7 +45,7 @@ export function PaymentDialog({ opportunity }: { opportunity: Opportunity }) {
           <CreditCardIcon size={16} aria-hidden /> Request payment
         </Button>
       </DialogTrigger>
-      <DialogContent title="Request a payment" description={`For ${opportunity.name}. The customer pays on Stripe's page; card details never touch Baton.`}>
+      <DialogContent title="Request a payment" description={`For ${opportunity.name}. The customer pays on Lemon Squeezy's hosted page; card details never touch Baton.`}>
         {created ? (
           <div className="flex flex-col gap-4">
             <div className="bg-surface p-4">
@@ -54,7 +54,7 @@ export function PaymentDialog({ opportunity }: { opportunity: Opportunity }) {
               <p className="mt-3 text-[13px] break-all text-ink">{created.checkoutUrl}</p>
             </div>
             <p className="text-sm text-ink-soft">
-              The status changes to Paid on its own when Stripe confirms it. No need to refresh. Unpaid links expire after 24 hours.
+              The status changes to Paid on its own when Lemon Squeezy confirms it. No need to refresh. Unpaid links expire after 1 hour.
             </p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button
@@ -79,7 +79,7 @@ export function PaymentDialog({ opportunity }: { opportunity: Opportunity }) {
             noValidate
           >
             <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3">
-              <Field label="Amount" required error={invalid ? (n > 999_999 ? "Stripe test mode accepts up to 999,999 per payment." : "Enter an amount greater than zero.") : undefined}>
+              <Field label="Amount" required error={invalid ? (n > 999_999 ? "Test mode accepts up to 999,999 per payment." : "Enter an amount greater than zero.") : undefined}>
                 {(p) => <Input {...p} type="number" inputMode="decimal" min="0.5" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="2500" autoFocus />}
               </Field>
               <Field label="Currency">

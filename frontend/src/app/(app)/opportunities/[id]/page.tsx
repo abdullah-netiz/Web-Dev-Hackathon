@@ -145,7 +145,7 @@ export default function OpportunityPage({ params }: { params: Promise<{ id: stri
                     <span className="min-w-0">
                       <span className="tabular block font-semibold text-ink">{formatMoney(p.amount, p.currency)}</span>
                       <span className="block truncate text-[12.5px] text-ink-soft">
-                        {p.requestedByName} · {formatDateTime(p.createdAt)} · {p.stripeSessionId}
+                        {p.requestedByName} · {formatDateTime(p.createdAt)} · {p.providerReference}
                       </span>
                     </span>
                     <PaymentTag value={p.status} />

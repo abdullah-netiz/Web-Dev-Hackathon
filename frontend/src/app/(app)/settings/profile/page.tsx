@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowSquareOutIcon, GoogleLogoIcon, TelegramLogoIcon } from "@phosphor-icons/react";
+import { GoogleLogoIcon, SlackLogoIcon } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { AvailabilitySwitch } from "@/components/app/availability-switch";
 import { SettingsSection } from "@/components/app/section";
 import { ThemeSwitch } from "@/components/app/theme-switch";
 import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import { Avatar } from "@/components/ui/misc";
 import { Tag } from "@/components/ui/status";
 
@@ -18,7 +19,7 @@ export default function ProfilePage() {
   const me = useMe();
   const qc = useQueryClient();
   const router = useRouter();
-  const [link, setLink] = useState<{ code: string; url: string } | null>(null);
+  const [memberId, setMemberId] = useState("");
   const u = me.user;
 
   const google = useMutation({
@@ -37,10 +38,23 @@ export default function ProfilePage() {
       void qc.invalidateQueries({ queryKey: ["members"] });
     },
   });
-  const telegram = useMutation({
-    mutationFn: () => api().integrations.telegramLink(),
-    onSuccess: setLink,
-    onError: (e) => toast.error(describeError(e).title),
+  const slack = useMutation({
+    mutationFn: (slackUserId?: string) => api().integrations.slackLink(slackUserId ? { slackUserId } : {}),
+    onSuccess: () => {
+      toast.success("Slack linked", { description: "We sent you a test message in Slack." });
+      setMemberId("");
+      void qc.invalidateQueries({ queryKey: ["session"] });
+      void qc.invalidateQueries({ queryKey: ["members"] });
+    },
+    onError: (e) => toast.error(describeError(e).title, { description: describeError(e).action }),
+  });
+  const unlinkSlack = useMutation({
+    mutationFn: () => api().integrations.slackUnlink(),
+    onSuccess: () => {
+      toast.success("Slack unlinked", { description: "You will only see escalations inside the app." });
+      void qc.invalidateQueries({ queryKey: ["session"] });
+      void qc.invalidateQueries({ queryKey: ["members"] });
+    },
   });
 
   return (
@@ -110,11 +124,11 @@ export default function ProfilePage() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Escalation alerts in Telegram" description="When a lead is handed to you because someone else missed their window, Baton messages you in Telegram with the lead's name, source, reason and a link.">
+      <SettingsSection title="Escalation alerts in Slack" description="When a lead is handed to you because someone else missed their window, Baton sends you a Slack direct message with the lead's name, source, reason and a link.">
         <div className="flex flex-col gap-4 bg-surface p-5">
-          <div className="flex items-center gap-3">
-            <TelegramLogoIcon size={28} weight="bold" className="text-ink" aria-hidden />
-            {u.telegramLinked ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <SlackLogoIcon size={28} weight="bold" className="text-ink" aria-hidden />
+            {u.slackLinked ? (
               <Tag tone="ok" shape="check">
                 Linked
               </Tag>
@@ -123,26 +137,36 @@ export default function ProfilePage() {
                 Not linked
               </Tag>
             )}
-            <p className="text-[13px] text-ink-soft">{u.telegramLinked ? "Alerts go to your Telegram chat." : "You won't get alerts outside the app until you link it."}</p>
+            <p className="text-[13px] text-ink-soft">
+              {u.slackLinked ? `Alerts go to Slack member ${u.slackUserId}.` : "If your Slack account uses " + u.email + ", alerts reach you automatically. Otherwise link it here."}
+            </p>
           </div>
-          {link ? (
-            <div className="bg-paper p-4">
-              <p className="text-sm text-ink">
-                Open the bot and press <span className="font-semibold">Start</span>. Your link code is <span className="tabular font-semibold">{link.code}</span>; it expires in 10 minutes.
-              </p>
-              <Button asChild className="mt-3">
-                <a href={link.url} target="_blank" rel="noopener noreferrer">
-                  Open Telegram <ArrowSquareOutIcon size={16} aria-hidden />
-                </a>
+          <div className="flex flex-wrap gap-2">
+            <Button variant={u.slackLinked ? "outline" : "primary"} loading={slack.isPending && !slack.variables} onClick={() => slack.mutate(undefined)}>
+              {u.slackLinked ? "Re-link by email and send a test" : "Link by my email"}
+            </Button>
+            {u.slackLinked && (
+              <Button variant="ghost" loading={unlinkSlack.isPending} onClick={() => unlinkSlack.mutate()}>
+                Unlink
               </Button>
+            )}
+          </div>
+          <form
+            className="flex flex-wrap items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (memberId.trim()) slack.mutate(memberId.trim());
+            }}
+          >
+            <div className="w-64">
+              <Field label="Or use your Slack member ID" hint="Slack profile → ⋮ → Copy member ID (starts with U)">
+                {(p) => <Input {...p} value={memberId} onChange={(e) => setMemberId(e.target.value)} placeholder="U0123ABCD" spellCheck={false} />}
+              </Field>
             </div>
-          ) : (
-            <div>
-              <Button variant={u.telegramLinked ? "outline" : "primary"} loading={telegram.isPending} onClick={() => telegram.mutate()}>
-                {u.telegramLinked ? "Link a different chat" : "Link Telegram"}
-              </Button>
-            </div>
-          )}
+            <Button type="submit" variant="outline" loading={slack.isPending && !!slack.variables} disabled={!/^[UW][A-Z0-9]{6,}$/.test(memberId.trim())}>
+              Link member ID
+            </Button>
+          </form>
         </div>
       </SettingsSection>
     </div>

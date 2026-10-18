@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarBlankIcon, ChatCircleDotsIcon, CreditCardIcon, PaperPlaneTiltIcon, type Icon } from "@phosphor-icons/react";
+import { CalendarBlankIcon, ChatCircleDotsIcon, CopyIcon, CreditCardIcon, SlackLogoIcon, type Icon } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -15,40 +15,43 @@ import { Field, Input } from "@/components/ui/field";
 import { ErrorState, ListSkeleton } from "@/components/ui/misc";
 import { ConnectionTag, Tag } from "@/components/ui/status";
 
-const META: Record<Provider, { name: string; purpose: string; icon: Icon; fields: { key: string; label: string; hint?: string }[] }> = {
+type FieldSpec = { key: string; label: string; hint?: string; secret?: boolean; config?: boolean };
+
+const META: Record<Provider, { name: string; purpose: string; icon: Icon; fields: FieldSpec[]; perUser?: string }> = {
   TWILIO: {
     name: "Twilio WhatsApp",
     purpose: "Talk to customers and capture leads from incoming messages.",
     icon: ChatCircleDotsIcon,
     fields: [
-      { key: "accountSid", label: "Account SID", hint: "Starts with AC" },
-      { key: "authToken", label: "Auth token", hint: "Used to verify Twilio's webhook signatures too" },
-      { key: "from", label: "Sandbox number", hint: "e.g. whatsapp:+14155238886" },
+      { key: "accountSid", label: "Account SID", hint: "Starts with AC, on the Twilio console home page", secret: true },
+      { key: "authToken", label: "Auth token", hint: "Also used to verify Twilio's webhook signatures", secret: true },
+      { key: "whatsappFrom", label: "Sandbox number", hint: "whatsapp:+14155238886 for the WhatsApp sandbox" },
     ],
   },
-  STRIPE: {
-    name: "Stripe",
-    purpose: "Collect payments for opportunities through hosted Checkout.",
+  LEMONSQUEEZY: {
+    name: "Lemon Squeezy",
+    purpose: "Collect payments for opportunities through a hosted checkout (test mode).",
     icon: CreditCardIcon,
     fields: [
-      { key: "secretKey", label: "Secret key", hint: "Test mode only: sk_test_…" },
-      { key: "webhookSecret", label: "Webhook signing secret", hint: "whsec_…, from the endpoint you added in Stripe" },
+      { key: "apiKey", label: "API key", hint: "Settings → API in Lemon Squeezy", secret: true },
+      { key: "storeId", label: "Store ID", hint: "Settings → Stores, the number next to the store" },
+      { key: "variantId", label: "Product variant ID", hint: "Any product's variant; its price is replaced per request" },
+      { key: "webhookSecret", label: "Webhook signing secret", hint: "The secret you typed when adding the webhook", secret: true },
+      { key: "currency", label: "Store currency", hint: "e.g. USD, must match the store", config: true },
     ],
   },
   GOOGLE: {
     name: "Google Calendar",
     purpose: "Book appointments on employees' own calendars.",
     icon: CalendarBlankIcon,
-    fields: [
-      { key: "clientId", label: "OAuth client ID" },
-      { key: "clientSecret", label: "OAuth client secret" },
-    ],
+    fields: [],
+    perUser: "Each employee connects their own Google account from Settings → Profile. The OAuth app itself is configured on the server.",
   },
-  TELEGRAM: {
-    name: "Telegram alerts",
-    purpose: "Tell the new owner when a lead escalates to them.",
-    icon: PaperPlaneTiltIcon,
-    fields: [{ key: "botToken", label: "Bot token", hint: "From @BotFather" }],
+  SLACK: {
+    name: "Slack alerts",
+    purpose: "Direct-message the new owner when a lead escalates to them.",
+    icon: SlackLogoIcon,
+    fields: [{ key: "botToken", label: "Bot token", hint: "xoxb-…, from OAuth & Permissions after installing your Slack app", secret: true }],
   },
 };
 
@@ -65,7 +68,11 @@ function ConnectDialog({ c, open, onOpenChange }: { c: IntegrationConnection; op
   const meta = META[c.provider];
   const [v, setV] = useState<Record<string, string>>({});
   const m = useMutation({
-    mutationFn: () => api().integrations.connect(c.provider, v),
+    mutationFn: () => {
+      const credentials = Object.fromEntries(meta.fields.filter((f) => !f.config && v[f.key]).map((f) => [f.key, v[f.key]!.trim()]));
+      const config = Object.fromEntries(meta.fields.filter((f) => f.config && v[f.key]).map((f) => [f.key, v[f.key]!.trim().toUpperCase()]));
+      return api().integrations.connect(c.provider, credentials, config);
+    },
     onSuccess: () => {
       toast.success(`${meta.name} connected`, { description: "Credentials are encrypted for this workspace only." });
       void qc.invalidateQueries({ queryKey: ["integrations"] });
@@ -87,7 +94,7 @@ function ConnectDialog({ c, open, onOpenChange }: { c: IntegrationConnection; op
         >
           {meta.fields.map((f) => (
             <Field key={f.key} label={f.label} hint={f.hint}>
-              {(p) => <Input {...p} type="password" autoComplete="off" spellCheck={false} value={v[f.key] ?? ""} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />}
+              {(p) => <Input {...p} type={f.secret ? "password" : "text"} autoComplete="off" spellCheck={false} value={v[f.key] ?? ""} onChange={(e) => setV({ ...v, [f.key]: e.target.value })} />}
             </Field>
           ))}
           {err && (
@@ -99,7 +106,7 @@ function ConnectDialog({ c, open, onOpenChange }: { c: IntegrationConnection; op
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={m.isPending} disabled={!Object.values(v).some(Boolean)}>
+            <Button type="submit" loading={m.isPending} disabled={meta.fields.some((f) => !f.config && !v[f.key]?.trim())}>
               Connect
             </Button>
           </div>
@@ -115,7 +122,11 @@ function ProviderCard({ c }: { c: IntegrationConnection }) {
   const [connecting, setConnecting] = useState(false);
   const test = useMutation({
     mutationFn: () => api().integrations.test(c.provider),
-    onSuccess: () => (toast.success(`${meta.name} answered`, { description: "Connection is healthy." }), qc.invalidateQueries({ queryKey: ["integrations"] })),
+    onSuccess: (r) => {
+      if (r.ok) toast.success(`${meta.name} answered`, { description: r.detail });
+      else toast.error(`${meta.name} test failed`, { description: r.detail });
+      void qc.invalidateQueries({ queryKey: ["integrations"] });
+    },
     onError: (e) => toast.error(describeError(e).title, { description: describeError(e).action }),
   });
   const disconnect = useMutation({
@@ -151,8 +162,28 @@ function ProviderCard({ c }: { c: IntegrationConnection }) {
             <p className="mt-0.5 text-ink">{c.lastError}</p>
           </div>
         )}
+        {(c.webhookUrl || c.statusCallbackUrl) && (
+          <div className="mt-4 flex flex-col gap-2 text-[13px]">
+            {[["Webhook URL", c.webhookUrl], ["Status callback URL", c.statusCallbackUrl]].filter(([, url]) => url).map(([label, url]) => (
+              <div key={label} className="min-w-0">
+                <p className="text-ink-soft">{label} (paste into the provider dashboard)</p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate bg-surface px-2 py-1 text-ink" title={url!}>{url}</code>
+                  <Button size="sm" variant="ghost" aria-label={`Copy ${label}`} onClick={() => void navigator.clipboard?.writeText(url!).then(() => toast.success("Copied"))}>
+                    <CopyIcon size={16} aria-hidden />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {meta.perUser && <p className="mt-4 bg-surface p-3 text-[13px] text-ink">{meta.perUser}</p>}
         <div className="mt-5 flex flex-wrap gap-2">
-          {c.status === "NOT_CONNECTED" ? (
+          {meta.perUser ? (
+            <Button variant="outline" loading={test.isPending} onClick={() => test.mutate()}>
+              Check connections
+            </Button>
+          ) : c.status === "NOT_CONNECTED" ? (
             <Button onClick={() => setConnecting(true)}>Connect</Button>
           ) : (
             <>
@@ -222,9 +253,9 @@ export default function IntegrationsPage() {
             <TabsList aria-label="Provider">
               <TabsTrigger value="">All</TabsTrigger>
               <TabsTrigger value="TWILIO">Twilio</TabsTrigger>
-              <TabsTrigger value="STRIPE">Stripe</TabsTrigger>
+              <TabsTrigger value="LEMONSQUEEZY">Payments</TabsTrigger>
               <TabsTrigger value="GOOGLE">Google</TabsTrigger>
-              <TabsTrigger value="TELEGRAM">Telegram</TabsTrigger>
+              <TabsTrigger value="SLACK">Slack</TabsTrigger>
             </TabsList>
           </Tabs>
         }
@@ -249,7 +280,7 @@ export default function IntegrationsPage() {
                 {events.data.map((e) => (
                   <tr key={e.id} className="border-b border-line/70 align-top">
                     <td className="tabular py-2.5 pr-4 whitespace-nowrap text-ink-soft">{formatDateTime(e.at)}</td>
-                    <td className="py-2.5 pr-4 text-ink">{META[e.provider].name}</td>
+                    <td className="py-2.5 pr-4 text-ink">{META[e.provider]?.name ?? e.provider}</td>
                     <td className="py-2.5 pr-4 text-ink">
                       {e.direction === "INBOUND" ? "In: " : "Out: "}
                       {e.type}
@@ -269,9 +300,13 @@ export default function IntegrationsPage() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="Escalation alert deliveries" description="Telegram alerts sent to new owners. Failed ones are retried up to 3 times, then listed here.">
+      <SettingsSection title="Escalation alert deliveries" description="Slack alerts sent to new owners. Failed ones are retried up to 3 times, then listed here.">
         {alerts.isPending ? (
           <ListSkeleton rows={3} />
+        ) : alerts.isError ? (
+          <ErrorState error={alerts.error} onRetry={() => alerts.refetch()} />
+        ) : !alerts.data.length ? (
+          <p className="text-sm text-ink-soft">No escalation alerts yet. They appear here when a lead escalates.</p>
         ) : (
           <ul className="flex flex-col gap-px bg-line">
             {alerts.data?.map((a) => (

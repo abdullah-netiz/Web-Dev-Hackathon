@@ -2,7 +2,8 @@ import type { Api } from "./contract";
 import { createHttpApi } from "./http";
 import { createMockApi } from "./mock";
 
-export const API_MODE: "mock" | "live" = process.env.NEXT_PUBLIC_API_MODE === "live" ? "live" : "mock";
+/** Live by default; `NEXT_PUBLIC_API_MODE=mock` runs the in-browser demo backend (no real providers). */
+export const API_MODE: "mock" | "live" = process.env.NEXT_PUBLIC_API_MODE === "mock" ? "mock" : "live";
 
 let instance: Api | null = null;
 

@@ -104,9 +104,9 @@ function Hero() {
         <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-ink-soft">
           {[
             { i: WhatsappLogoIcon, n: "WhatsApp · Twilio" },
-            { i: CreditCardIcon, n: "Stripe" },
+            { i: CreditCardIcon, n: "Lemon Squeezy" },
             { i: CalendarBlankIcon, n: "Google Calendar" },
-            { i: PaperPlaneTiltIcon, n: "Telegram" },
+            { i: PaperPlaneTiltIcon, n: "Slack" },
           ].map((x) => (
             <li key={x.n} className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.01em]">
               <x.i size={22} weight="duotone" className="text-teal" /> {x.n}

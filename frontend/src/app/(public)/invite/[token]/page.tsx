@@ -25,7 +25,7 @@ export default function InvitePage() {
   });
   const err = m.error ? describeError(m.error) : null;
   return (
-    <AuthFrame title="Join your team." intro="Set your name and a password. Then connect your calendar and Telegram so leads and alerts can reach you.">
+    <AuthFrame title="Join your team." intro="Set your name and a password. Then connect your calendar and Slack so leads and alerts can reach you.">
       <form
         className="flex flex-col gap-5"
         onSubmit={(e) => {

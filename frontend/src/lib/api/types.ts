@@ -4,6 +4,7 @@ export type ISODate = string;
 export type BaseLevel = "OWNER" | "ADMIN" | "USER";
 export type Availability = "AVAILABLE" | "BUSY" | "ON_LEAVE" | "OFFLINE";
 
+/** Same keys as the backend (GET /meta/permissions); Owner and Admin hold all of them (F1.2, F1.3). */
 export const PERMISSIONS = [
   { key: "crm.view", group: "CRM records", label: "View records" },
   { key: "crm.create", group: "CRM records", label: "Create records" },
@@ -13,12 +14,13 @@ export const PERMISSIONS = [
   { key: "crm.view_values", group: "CRM records", label: "See opportunity values" },
   { key: "leads.view_all", group: "Leads", label: "See every lead, not only own" },
   { key: "leads.reassign", group: "Leads", label: "Reassign leads" },
-  { key: "assignment.manage", group: "Leads", label: "Manage assignment rules" },
+  { key: "leads.manage_rules", group: "Leads", label: "Manage assignment rules" },
   { key: "dashboard.company", group: "Insight", label: "Company-wide dashboard" },
   { key: "audit.view", group: "Insight", label: "View audit history" },
+  { key: "integrations.view", group: "Administration", label: "See integration status and history" },
   { key: "integrations.manage", group: "Administration", label: "Manage integrations" },
-  { key: "pipelines.manage", group: "Administration", label: "Manage pipelines and fields" },
-  { key: "members.manage", group: "Administration", label: "Invite and manage members" },
+  { key: "settings.manage", group: "Administration", label: "Manage workspace, pipelines and fields" },
+  { key: "users.manage", group: "Administration", label: "Invite and manage members" },
   { key: "roles.manage", group: "Administration", label: "Manage roles and permissions" },
 ] as const;
 
@@ -55,7 +57,9 @@ export interface User {
   maxOpenLeads: number | null;
   isManager: boolean;
   backupUserId: ID | null;
-  telegramLinked: boolean;
+  slackLinked: boolean;
+  slackUserId: string | null;
+  invitePending?: boolean;
   calendarStatus: CalendarStatus;
   timeZone: string;
   lastAssignedAt: ISODate | null;
@@ -292,7 +296,8 @@ export interface Payment {
   currency: string;
   status: PaymentStatus;
   refundedAmount: number;
-  stripeSessionId: string;
+  /** Lemon Squeezy order id once paid, else the checkout id (I2.7). */
+  providerReference: string;
   checkoutUrl: string | null;
   createdAt: ISODate;
   paidAt: ISODate | null;
@@ -319,7 +324,7 @@ export interface BusySlot {
   end: ISODate;
 }
 
-export type Provider = "TWILIO" | "STRIPE" | "GOOGLE" | "TELEGRAM";
+export type Provider = "TWILIO" | "LEMONSQUEEZY" | "GOOGLE" | "SLACK";
 export type ConnectionStatus = "NOT_CONNECTED" | "CONNECTED" | "ERROR";
 
 export interface IntegrationConnection {
@@ -331,6 +336,10 @@ export interface IntegrationConnection {
   lastErrorAt: ISODate | null;
   canDo: string[];
   cannotDo: string[];
+  /** Where to paste this workspace's webhook in the provider dashboard. */
+  webhookUrl?: string | null;
+  statusCallbackUrl?: string | null;
+  details?: Record<string, unknown>;
 }
 
 export interface IntegrationEvent {
@@ -350,7 +359,7 @@ export interface AlertDelivery {
   leadLabel: string;
   userId: ID;
   userName: string;
-  channel: "TELEGRAM";
+  channel: "SLACK";
   status: "SENT" | "FAILED" | "RETRYING";
   attempts: number;
   lastError: string | null;
@@ -441,4 +450,6 @@ export type RealtimeEvent =
   | { type: "payment:updated"; payment: Payment }
   | { type: "availability:changed"; user: User }
   | { type: "opportunity:updated"; opportunity: Opportunity }
-  | { type: "integration:updated"; connection: IntegrationConnection };
+  | { type: "integration:updated"; connection: IntegrationConnection }
+  /** Something changed that has no single object to show; the listed query keys are refetched. */
+  | { type: "refresh"; keys: string[] };

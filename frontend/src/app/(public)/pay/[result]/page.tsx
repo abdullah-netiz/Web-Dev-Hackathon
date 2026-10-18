@@ -10,7 +10,7 @@ import { formatMoney } from "@/lib/utils";
 function Result() {
   const { result } = useParams<{ result: string }>();
   const params = useSearchParams();
-  const session = params.get("session_id") ?? "";
+  const session = params.get("payment") ?? params.get("session_id") ?? "";
   const q = useQuery({
     queryKey: ["pay", session],
     queryFn: () => api().public.paymentStatus(session),
@@ -23,7 +23,7 @@ function Result() {
 
   let icon = <ClockIcon size={48} weight="fill" className="text-teal" aria-hidden />;
   let title = "Confirming your payment…";
-  let body = "Stripe is confirming the payment with us. This page updates by itself in a few seconds.";
+  let body = "The payment provider is confirming the payment with us. This page updates by itself in a few seconds.";
   if (cancelled && status !== "PAID") {
     icon = <XCircleIcon size={48} weight="fill" className="text-off" aria-hidden />;
     title = "No payment was taken.";
@@ -31,7 +31,7 @@ function Result() {
   } else if (status === "PAID") {
     icon = <CheckCircleIcon size={48} weight="fill" className="text-ok" aria-hidden />;
     title = "Payment received. Thank you.";
-    body = "Stripe has confirmed it and the team can see it now. A receipt is on its way from Stripe.";
+    body = "Lemon Squeezy has confirmed it and the team can see it now. A receipt is on its way by email.";
   } else if (status === "EXPIRED" || status === "FAILED") {
     icon = <XCircleIcon size={48} weight="fill" className="text-signal" aria-hidden />;
     title = status === "EXPIRED" ? "This payment link expired." : "The payment didn't go through.";
@@ -52,7 +52,7 @@ function Result() {
         </p>
       )}
       <p className="mt-4 text-lg leading-relaxed text-ink-soft">{body}</p>
-      <p className="mt-10 text-[13px] text-ink-faint">Card details are handled by Stripe and never reach us.</p>
+      <p className="mt-10 text-[13px] text-ink-faint">Card details are handled by Lemon Squeezy and never reach us.</p>
     </main>
   );
 }

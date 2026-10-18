@@ -76,7 +76,7 @@ export function RecordBento() {
             </div>
           </Tile>
           <Tile className="lg:col-span-2">
-            <TileHead icon={CreditCardIcon} label="Stripe" title="Paid shows up on its own." body="Send a checkout link from the deal. Stripe's signed webhook marks it paid; no refresh, no card data in Baton." />
+            <TileHead icon={CreditCardIcon} label="Lemon Squeezy" title="Paid shows up on its own." body="Send a checkout link from the deal. The signed payment webhook marks it paid; no refresh, no card data in Baton." />
             <div data-ui className="mt-auto rounded-[12px] bg-surface p-4">
               <div className="flex items-center justify-between">
                 <span>
@@ -105,7 +105,7 @@ export function RecordBento() {
             </div>
           </Tile>
           <Tile className="lg:col-span-3">
-            <TileHead icon={PaperPlaneTiltIcon} label="Telegram" title="Alerts that leave the app." body="When a lead is handed to someone, they hear about it within seconds, with who, why and a link. Failed alerts are retried and listed for admins." />
+            <TileHead icon={PaperPlaneTiltIcon} label="Slack" title="Alerts that leave the app." body="When a lead is handed to someone, they hear about it within seconds, with who, why and a link. Failed alerts are retried and listed for admins." />
             <div data-ui className="mt-auto rounded-[12px] bg-ink p-4 text-paper">
               <p className="text-[11.5px] font-semibold text-[#9cc5c0]">Baton bot · now</p>
               <p className="mt-1 text-[14px] font-semibold">Escalated to you: Camila Ortiz</p>
@@ -211,10 +211,10 @@ export function Managers() {
             <ul className="js-audit mt-5 flex flex-col gap-2.5">
               {[
                 { t: "14:02:11", a: "Lead escalated", d: "Camila Ortiz · Bilal Hussain → Priya Nair", who: "System" },
-                { t: "14:02:12", a: "Alert sent", d: "Telegram to Priya Nair · delivered", who: "System" },
+                { t: "14:02:12", a: "Alert sent", d: "Slack to Priya Nair · delivered", who: "System" },
                 { t: "14:02:51", a: "Lead acknowledged", d: "Camila Ortiz · first response 2m 40s", who: "Priya Nair" },
                 { t: "14:10:03", a: "Permissions changed", d: "Sales: see opportunity values → off", who: "Amina Rahman" },
-                { t: "14:12:40", a: "Integration changed", d: "Stripe: connected", who: "Daniel Okafor" },
+                { t: "14:12:40", a: "Integration changed", d: "Lemon Squeezy: connected", who: "Daniel Okafor" },
               ].map((x) => (
                 <li key={x.t} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-[10px] bg-paper/[0.05] px-3.5 py-3 text-[13px]">
                   <span className="tabular text-paper/50">{x.t}</span>

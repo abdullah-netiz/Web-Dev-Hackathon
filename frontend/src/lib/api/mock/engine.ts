@@ -180,7 +180,7 @@ export function assignNew(db: MockDB, lead: Scoped<Lead>) {
 
 function sendAlert(db: MockDB, lead: Scoped<Lead>, target: User, reason: string) {
   const W = lead.workspaceId;
-  const ok = target.telegramLinked;
+  const ok = target.slackLinked;
   db.alerts.push({
     id: uid("alr"),
     workspaceId: W,
@@ -188,7 +188,7 @@ function sendAlert(db: MockDB, lead: Scoped<Lead>, target: User, reason: string)
     leadLabel: lead.contactName,
     userId: target.id,
     userName: target.name,
-    channel: "TELEGRAM",
+    channel: "SLACK",
     status: ok ? "SENT" : "FAILED",
     attempts: ok ? 1 : 3,
     lastError: ok ? null : `${target.name} has not linked Telegram yet, so the alert could not be delivered.`,
@@ -197,7 +197,7 @@ function sendAlert(db: MockDB, lead: Scoped<Lead>, target: User, reason: string)
   db.events.push({
     id: uid("evt"),
     workspaceId: W,
-    provider: "TELEGRAM",
+    provider: "SLACK",
     direction: "OUTBOUND",
     type: "sendMessage",
     status: ok ? "OK" : "FAILED",

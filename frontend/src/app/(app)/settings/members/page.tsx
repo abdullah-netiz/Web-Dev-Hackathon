@@ -129,6 +129,14 @@ function MemberRow({ u, all, roles }: { u: User; all: User[]; roles: { id: strin
     },
     onError: (e) => toast.error(describeError(e).title, { description: describeError(e).action }),
   });
+  const react = useMutation({
+    mutationFn: () => api().members.reactivate(u.id),
+    onSuccess: () => {
+      toast.success(`${u.name} reactivated`, { description: "They can sign in again. Set them to Available to receive leads." });
+      void qc.invalidateQueries({ queryKey: ["members"] });
+    },
+    onError: (e) => toast.error(describeError(e).title, { description: describeError(e).action }),
+  });
   const ownerLocked = u.baseLevel === "OWNER" && me.user.baseLevel !== "OWNER";
   const isOwner = u.baseLevel === "OWNER";
   const self = u.id === me.user.id;
@@ -146,6 +154,11 @@ function MemberRow({ u, all, roles }: { u: User; all: User[]; roles: { id: strin
             {!u.active && (
               <Tag tone="off" shape="bar">
                 Deactivated
+              </Tag>
+            )}
+            {u.active && u.invitePending && (
+              <Tag tone="warn" shape="clock">
+                Invite pending
               </Tag>
             )}
           </div>
@@ -216,6 +229,11 @@ function MemberRow({ u, all, roles }: { u: User; all: User[]; roles: { id: strin
           {!isOwner && !self && u.active && (
             <Button variant="ghost" size="sm" className="self-center text-signal hover:bg-signal-tint" loading={deact.isPending} onClick={() => deact.mutate()}>
               Deactivate
+            </Button>
+          )}
+          {!u.active && (
+            <Button variant="outline" size="sm" className="self-center" loading={react.isPending} onClick={() => react.mutate()}>
+              Reactivate
             </Button>
           )}
         </div>
