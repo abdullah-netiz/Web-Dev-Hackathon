@@ -41,3 +41,18 @@ export const USER_DEFAULT_PERMISSIONS: string[] = [
 export function isPermissionKey(value: string): value is PermissionKey {
   return ALL_PERMISSION_KEYS.includes(value);
 }
+
+/**
+ * Base level and role permissions combine as: an Owner always holds every
+ * permission; everyone else holds exactly what their role grants (F1.3).
+ * Unknown keys are dropped so a renamed permission can never silently grant access.
+ */
+export function resolveEffectivePermissions(
+  baseLevel: string,
+  rolePermissions: readonly string[],
+): string[] {
+  if (baseLevel === 'OWNER') {
+    return [...ALL_PERMISSION_KEYS];
+  }
+  return [...new Set(rolePermissions.filter(isPermissionKey))];
+}
