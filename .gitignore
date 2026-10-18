@@ -8,3 +8,5 @@ coverage/
 *.log
 .turbo/
 .DS_Store
+
+.taste-skill/

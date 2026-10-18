@@ -20,7 +20,7 @@ timeline events and queue-based automation.
 
 Backend: NestJS 11 on Fastify, Prisma 6 + PostgreSQL 16, BullMQ 5 on Redis 7, Socket.IO 4, Zod 4, argon2id
 sessions, Pino. Frontend: Next.js 16, React 19, Tailwind 4, shadcn/ui (Radix), TanStack Query 5 + Table v8,
-react-hook-form + Zod. Hosting: Railway (api, Postgres, Redis), Vercel (web). Alerts: Telegram bot.
+react-hook-form + Zod. Hosting: Railway (api, Postgres, Redis), Vercel (web). Alerts: Slack. Payments: Lemon Squeezy test mode. (Telegram is blocked in Pakistan and Stripe does not onboard Pakistani accounts.)
 
 ## 3. Architecture
 
@@ -28,10 +28,10 @@ react-hook-form + Zod. Hosting: Railway (api, Postgres, Redis), Vercel (web). Al
 Browser (Next.js on Vercel) ── HTTPS JSON, Bearer session token ──► backend API (Railway, NestJS/Fastify)
                             ── WSS socket.io (short-lived ws token) ──►   ├─ auth · workspaces · crm · leads · audit · metrics · realtime
                                                                           ├─ integrations: connections, events, webhooks
-                                                                          │     providers: twilio | stripe | google | telegram (behind interfaces)
+                                                                          │     providers: twilio | lemonsqueezy | google | slack (behind interfaces)
                                                                           └─ jobs (BullMQ): escalation · integrations · alerts · housekeeping
                                                                       PostgreSQL ◄─ Prisma      Redis ◄─ BullMQ (noeviction, AOF)
-Webhooks in: /webhooks/twilio, /webhooks/twilio/status, /webhooks/stripe, /webhooks/telegram · OAuth: /calendar/google/callback
+Webhooks in: /webhooks/twilio, /webhooks/twilio/status, /webhooks/lemonsqueezy · OAuth: /calendar/google/callback
 Public: /f/<workspace-slug> lead form
 ```
 
@@ -44,7 +44,7 @@ All tenant tables carry `workspaceId` and composite indexes starting with it; ed
 | Table | Purpose / integrity rule |
 |---|---|
 | `workspaces`, `workspace_settings` | tenant + lead-engine settings in seconds (ack window, levels, idle, max open leads, round-robin cursor) |
-| `users` (baseLevel OWNER/ADMIN/USER, roleId, availability, telegramChatId), `sessions`, `roles` (permissions[]) | F1; Owner protected from Admin; sessions expire and revoke (Q1) |
+| `users` (baseLevel OWNER/ADMIN/USER, roleId, availability, slackUserId), `sessions`, `roles` (permissions[]) | F1; Owner protected from Admin; sessions expire and revoke (Q1) |
 | `companies`, `contacts` (phone unique per workspace, optedOut, tags, custom JSONB) | F2.1, I1.5; GIN on custom |
 | `pipelines`, `pipeline_stages` (order, isWon/isLost, requiredFieldKeys) | F2.5 safe delete needs `moveToStageId` |
 | `custom_field_definitions` (entity, key, type, options, pipelineId, isArchived) | F2.2, F2.3; archive not delete |
@@ -55,9 +55,9 @@ All tenant tables carry `workspaceId` and composite indexes starting with it; ed
 | `saved_lists`, `dashboard_prefs` | F2.6, F5.5 |
 | `integration_connections` (encrypted secrets, status, lastOkAt, lastError), `integration_events` (unique provider+externalEventId) | I5 |
 | `conversations`, `messages` (providerSid unique, monotonic status) | I1 |
-| `payments` (stripeSessionId unique) | I2, Section 7 revenue |
+| `payments` (checkoutId unique, providerOrderId) | I2, Section 7 revenue |
 | `appointments`, `calendar_tokens` (per user, encrypted refresh token) | I3 |
-| `alert_deliveries` (unique assignment+channel), `member_links` (Telegram link codes) | I4 |
+| `alert_deliveries` (unique assignment+channel); Slack destination = member ID found by email | I4 |
 
 ## 5. Lead engine (F3)
 
@@ -67,7 +67,7 @@ capture(source) → lead NEW → assign(): candidates = users AVAILABLE with ope
   esc-<leadId>-<assignmentId> → activity + audit + socket lead:assigned
 ack()/any recorded action → assignment ACKNOWLEDGED, lead ACKNOWLEDGED, timeToFirstResponse, remove job, audit, socket
 job fires → tx: re-read assignment; if still PENDING → EXPIRED; level+1 target (next available → backup → manager);
-  new PENDING assignment + job; audit; socket lead:escalated; Telegram alert via alerts queue
+  new PENDING assignment + job; audit; socket lead:escalated; Slack DM via alerts queue
 availability → ON_LEAVE/OFFLINE → reassign that user's PENDING assignments immediately (F3.6)
 recovery sweep every 30 s → recoveryReason OVERDUE | ESCALATED_TWICE | IDLE | NONE (Section 7)
 startup reconciliation → every PENDING assignment with dueAt < now and no job → enqueue delay 0 (Q5)
@@ -81,7 +81,7 @@ Pure decision logic lives in `backend/src/leads/assignment.logic.ts` with unit t
 |---|---|
 | **Backend (Claude)** | `backend/`: data model, auth/RBAC, CRM API, lead engine, audit, metrics, Socket.IO, all four integrations, intake form, API reference (`docs/api.md`), seed data, tests |
 | **Teammate 1 — Frontend** | `frontend/`: Next.js app against `docs/api.md`: auth, settings (users, roles matrix, pipeline, fields, assignment, integrations, audit), contacts/companies, opportunities board + list, leads inbox with countdown, recovery queue, conversations, payments, booking dialog, dashboard; responsive + a11y + loading/error states |
-| **Teammate 2 — Ops & integrations setup** | Railway (api, Postgres, Redis) + Vercel; provider accounts (Twilio sandbox, Stripe test, Google OAuth client, Telegram bot) and webhook registration; seed demo workspace; `docs/demo-script.md`; README; fallback videos; also helps on frontend screens once ops is done |
+| **Teammate 2 — Ops & integrations setup** | Railway (api, Postgres, Redis) + Vercel; provider accounts (Twilio sandbox, Lemon Squeezy test store, Google OAuth client, Slack app) and webhook registration; seed demo workspace; `docs/demo-script.md`; README; fallback videos; also helps on frontend screens once ops is done |
 
 Hand-offs: backend publishes `docs/api.md` + Zod schemas in `backend/src/**/dto` first; frontend builds against mocks until endpoints land. Ops gives backend the public URL and provider credentials by minute 60.
 
@@ -91,13 +91,13 @@ Hand-offs: backend publishes `docs/api.md` + Zod schemas in `backend/src/**/dto`
 |---|---|---|---|
 | 0:00–0:45 | scaffold, Prisma schema, auth + sessions + permission guard, `docs/api.md` v1 | Next.js scaffold, shadcn (Radix), Query provider, shell, auth pages against API doc | Railway + Vercel projects, Postgres/Redis, domain or Railway URL, provider accounts |
 | 0:45–2:15 | CRM module (companies, contacts, custom fields, pipeline, opportunities, saved lists, activities), audit, Socket.IO | settings screens, contacts list/detail with custom-field renderer, opportunities board | deploy API from `backend/Dockerfile`, env vars, webhook URLs registered |
-| 2:15–3:45 | lead engine + recovery + reconciliation; Twilio, Telegram | leads inbox + countdown + acknowledge, recovery queue, conversations | seed workspace with 300 contacts / 60 opportunities; real phone joins Twilio sandbox |
-| 3:45–4:45 | Stripe, Google Calendar, metrics/dashboard endpoints | dashboard with drill-down, payment request, booking dialog, integrations page | end-to-end run on cloud; fix list |
+| 2:15–3:45 | lead engine + recovery + reconciliation; Twilio, Slack | leads inbox + countdown + acknowledge, recovery queue, conversations | seed workspace with 300 contacts / 60 opportunities; real phone joins Twilio sandbox |
+| 3:45–4:45 | Lemon Squeezy, Google Calendar, metrics/dashboard endpoints | dashboard with drill-down, payment request, booking dialog, integrations page | end-to-end run on cloud; fix list |
 | 4:45–5:30 | fixes, tests green, restart-survival check | 375 px pass, keyboard pass, toasts everywhere | demo script rehearsal, fallback videos |
 | 5:30–6:00 | buffer | buffer | buffer |
 
 **Cut lines** (drop in order if behind): F2.3 second pipeline → I3.6 reschedule (keep cancel) → I3.4 conflict check → F2.6 saved lists (URL filters) → I2.5 refund UI → F5.5 prefs (localStorage) → CSV export.
-**Never cut:** isolation, server-side permissions + value masking, ack timer + escalation + Telegram, restart survival, Stripe webhook-driven status, audit log.
+**Never cut:** isolation, server-side permissions + value masking, ack timer + escalation + Slack alert, restart survival, payment webhook-driven status, audit log.
 
 ## 8. Requirement → NFR traceability
 
@@ -127,10 +127,10 @@ Hand-offs: backend publishes `docs/api.md` + Zod schemas in `backend/src/**/dto`
 1. Fresh clone → `docker compose up -d` → `pnpm --dir backend db:migrate && db:seed && dev` (Q13).
 2. Two workspaces: curl a workspace A contact id with workspace B's token → 404 (F1.6).
 3. User without `crm.view_values`: value masked in list, detail, export; `PATCH /roles/:id` as User → 403 (F1.4, F1.5).
-4. Ack window 20 s: public form → lead live for everyone → expiry → next user → Telegram → second expiry → manager → recovery queue with reason (F3, I4, Q11).
+4. Ack window 20 s: public form → lead live for everyone → expiry → next user → Slack DM → second expiry → manager → recovery queue with reason (F3, I4, Q11).
 5. Restart API during a 60 s window → exactly one escalation afterwards (Q5).
 6. WhatsApp from a phone → conversation + lead; reply → delivered; webhook replay → no duplicate; forged signature → 403 + event (I1).
-7. Payment link → `4242…` → PAID without refresh; `stripe trigger checkout.session.expired` → EXPIRED; dashboard updates (I2).
+7. Payment link → `4242…` → PAID without refresh; an unpaid link turns EXPIRED after its deadline; refund in the Lemon Squeezy dashboard → REFUNDED; dashboard updates (I2).
 8. Google connect → busy-slot warning → free slot → event in Google Calendar → cancel → removed + activity (I3).
 9. Audit filtered by escalation; `DELETE /audit/:id` → 404 (F4).
 10. 375 px walkthrough, keyboard-only dialog, Lighthouse a11y, 500-contact paginated list, search stays responsive.
@@ -141,7 +141,7 @@ Hand-offs: backend publishes `docs/api.md` + Zod schemas in `backend/src/**/dto`
 - Metadata-driven custom fields: a definitions table plus JSON values, validated server-side from the definitions.
 - Timeline activities written alongside every record change, with actor and before/after properties.
 - Queue-backed delayed steps (their workflow `DELAY` is a BullMQ job that resumes the run) → our ack timers.
-- Outbound webhooks signed with HMAC over `timestamp:body` → our Twilio/Stripe verification discipline.
+- Outbound webhooks signed with HMAC over `timestamp:body` → our Twilio/Lemon Squeezy verification discipline.
 - Roles as permission sets with object-level and field-level permissions → our `permissions[]` plus value masking.
 
 ## 11. Risks

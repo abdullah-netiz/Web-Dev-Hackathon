@@ -1,0 +1,45 @@
+# Render Blueprint for the API and its Redis (New → Blueprint → pick this repo).
+# The database is Supabase and the frontend is Vercel; see docs/DEPLOYMENT.md for every value.
+services:
+  - type: web
+    name: baton-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npx --yes pnpm@10 install --frozen-lockfile --prod=false && npx prisma generate && npx --yes pnpm@10 build
+    startCommand: npx prisma migrate deploy && node dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: baton-redis
+          property: connectionString
+      # Fill these in the Render dashboard (never commit them)
+      - key: DATABASE_URL # Supabase → Connect → Session pooler URI + ?connection_limit=5
+        sync: false
+      - key: APP_ENCRYPTION_KEY # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+        sync: false
+      - key: PUBLIC_URL # this service's https://….onrender.com URL
+        sync: false
+      - key: APP_URL # the Vercel frontend URL
+        sync: false
+      - key: CORS_ORIGINS # same as APP_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
+
+  - type: keyvalue
+    name: baton-redis
+    plan: free
+    # BullMQ needs noeviction so delayed escalation jobs are never dropped
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
