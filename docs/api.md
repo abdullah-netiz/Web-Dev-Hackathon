@@ -106,6 +106,106 @@ this on app load to hydrate the session and to drive permission-gated UI.
 
 ---
 
+## Lists, pagination and optimistic concurrency (Q4, Q9)
+
+Every list endpoint accepts:
+
+| Param | Meaning |
+|---|---|
+| `limit` | 1–100, default 25 |
+| `cursor` | opaque id from `meta.nextCursor`; omit for the first page |
+| `q` | optional search term |
+
+List responses are `{ "data": [...], "meta": { "nextCursor": "…" \| null, "hasMore": true } }`.
+Pass `meta.nextCursor` as `cursor` to fetch the next page; stop when `hasMore` is `false`.
+
+Editable records carry a `version`. Send the `version` you last read on `PATCH`; if it is
+stale the update returns `409 conflict` and you must reload before retrying.
+
+## Companies — `/companies`
+
+Fields: `name` (required), `domain`, `phone`, `address`, `notes`, `tags`, `custom`.
+Permission gate: read `crm.view`, create `crm.create`, edit `crm.edit`, delete `crm.delete`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/companies` | list (`limit`/`cursor`/`q`) |
+| `GET` | `/companies/:id` | single, `404` if absent/other workspace |
+| `POST` | `/companies` | `201`; body above |
+| `PATCH` | `/companies/:id` | body + `version`; `409` on stale version |
+| `DELETE` | `/companies/:id` | `{ "data": { "ok": true } }` |
+
+## Contacts — `/contacts`
+
+Fields: `firstName` (required), `lastName`, `email`, `phone`, `companyId`, `ownerId`,
+`optedOut`, `tags`, `custom`. `GET /contacts` also accepts `companyId` as a filter.
+Same permission gate as companies. A `companyId` from another workspace is rejected with
+`409 conflict`; a duplicate `phone` returns `409 conflict`.
+
+## Opportunities — `/opportunities`
+
+Fields: `name` (required), `companyId`, `contactId`, `pipelineId`, `stageId`, `ownerId`,
+`value`, `currency`, `closeDate`, `description`, `custom`. `GET /opportunities` also
+accepts `stageId` and `ownerId` filters.
+
+**Value redaction (F1.4):** the `value` field is only present when the caller has
+`crm.view_values`. Without it, `value` is omitted from both list and single responses
+(and from totals). The UI must read the permission, not assume the key exists.
+
+## Pipelines & stages — `/pipelines`
+
+All routes require `crm.configure` (read requires `crm.view`).
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/pipelines` | pipelines with their stages, ordered |
+| `GET` | `/pipelines/:id` | one pipeline with stages |
+| `POST` | `/pipelines` | `{ name, isDefault }` |
+| `PATCH` | `/pipelines/:id` | `{ name?, isDefault?, version }` |
+| `DELETE` | `/pipelines/:id` | `409` while the pipeline still holds opportunities (F2.5) |
+| `POST` | `/pipelines/:id/stages` | `{ name, order?, isWon?, isLost?, requiredFieldKeys? }` |
+| `PATCH` | `/pipelines/:id/stages/:stageId` | stage fields + `version` |
+| `POST` | `/pipelines/:id/stages/reorder` | `{ stageIds: [...] }` — full new order |
+| `DELETE` | `/pipelines/:id/stages/:stageId?moveToStageId=` | `moveToStageId` is **required**; its opportunities are moved there first |
+
+Deleting a stage without `moveToStageId` is a `400 validation_error`. The response reports
+how many opportunities were moved: `{ "data": { "movedOpportunities": 3 } }`.
+
+## Custom fields — `/custom-fields` (F2.2)
+
+Fields: `entity` (`CONTACT` \| `COMPANY` \| `OPPORTUNITY`), `key` (lower_snake_case, unique
+per workspace), `label`, `type` (`TEXT` \| `NUMBER` \| `DATE` \| `SELECT` \| `CHECKBOX`),
+`options` (required when `type` is `SELECT`), `required`, `pipelineId`, `order`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/custom-fields?entity=&includeArchived=` | archived fields are hidden unless `includeArchived=true` |
+| `POST` | `/custom-fields` | `403` without `crm.configure`; `400` if a `SELECT` has no options |
+| `PATCH` | `/custom-fields/:id` | editable fields + `version` |
+| `DELETE` | `/custom-fields/:id` | **archives** (never deletes rows) so stored values stay readable |
+
+## Activities — `/activities`
+
+A timeline entry attached to a record. Fields: `entityType`, `entityId`, `type` (`NOTE`,
+`CALL`, `EMAIL`, `MEETING`, `STAGE_CHANGE`, `FIELD_EDIT`, `ASSIGNMENT`, `ACKNOWLEDGEMENT`,
+`ESCALATION`, `MESSAGE`, `PAYMENT`, `APPOINTMENT`, `SYSTEM`), `title`, `body`, `meta`.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/activities?entityType=&entityId=&limit=&cursor=` | newest first |
+| `POST` | `/activities` | requires `crm.create`; rejected if the target record is not in the workspace |
+
+## Audit — `/audit` (F4)
+
+`GET /audit` (requires `audit.view`) returns the append-only history, newest first,
+keyset-paginated. There is no update or delete route; the DB also rejects them.
+
+```jsonc
+{ "data": [ { "id": "…", "action": "company.updated", "actorLabel": "Demo Owner",
+  "entityType": "company", "entityId": "…", "summary": "…", "createdAt": "…" } ],
+  "meta": { "nextCursor": null, "hasMore": false } }
+```
+
 ## Seed data (for frontend development)
 
 `pnpm db:seed` creates workspace slug `demo`:
@@ -121,6 +221,5 @@ Seeded: 5 companies, 10 contacts, 12 opportunities across 5 pipeline stages, 4 l
 
 ## Planned next (not yet implemented)
 
-`/workspaces`, `/users`, `/roles`, `/contacts`, `/companies`, `/opportunities`,
-`/pipelines`, `/custom-fields`, `/leads`, `/activities`, `/audit`, `/dashboard`,
-`/integrations`. Each will follow the same envelope and error shape.
+`/workspaces`, `/users`, `/roles`, `/leads`, `/dashboard`, `/integrations`. Each will
+follow the same envelope, pagination and error shape.
