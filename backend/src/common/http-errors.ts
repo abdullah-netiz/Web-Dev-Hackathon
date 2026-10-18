@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 
 /** A missing record — or one belonging to another workspace — is always a 404 (F1.6, Q2). */
 export function notFound(what = 'record'): NotFoundException {
@@ -25,4 +30,9 @@ export function businessRule(message: string, action: string): ConflictException
 /** Input that is well-formed but violates a field rule, e.g. a dropdown with no options (Q3). */
 export function invalidRequest(message: string, action: string): BadRequestException {
   return new BadRequestException({ code: 'validation_error', message, action });
+}
+
+/** The session is valid but this user may not perform the action (F1.5). */
+export function forbidden(message: string, action: string): ForbiddenException {
+  return new ForbiddenException({ code: 'forbidden', message, action });
 }

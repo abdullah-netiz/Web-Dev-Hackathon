@@ -195,6 +195,48 @@ A timeline entry attached to a record. Fields: `entityType`, `entityId`, `type` 
 | `GET` | `/activities?entityType=&entityId=&limit=&cursor=` | newest first |
 | `POST` | `/activities` | requires `crm.create`; rejected if the target record is not in the workspace |
 
+## Leads — `/leads` (F3, the core)
+
+A lead must never be without an accountable owner. Assignment is round-robin over
+members whose availability is `AVAILABLE` and who are under the open-lead cap; an
+acknowledgement window is armed as a delayed job that escalates only while the
+assignment is still `PENDING` (so two timers can never escalate the same lead twice).
+
+`GET /leads` accepts `limit`/`cursor`/`q` plus `status`, `ownerId`, `unassigned=true`.
+Each lead exposes `escalationCount`, `recoveryReason`, `timeToFirstResponseSec` and its
+current `PENDING` assignment (with `dueAt`, so the UI can show remaining time).
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| `GET` | `/leads` | `leads.view` | list |
+| `GET` | `/leads/:id` | `leads.view` | detail incl. full assignment history |
+| `GET` | `/leads/recovery` | `leads.view` | leads overdue, escalated more than once, or idle — each with a reason |
+| `GET` | `/leads/settings` | `leads.view` | ack window, levels, open-lead cap, idle period |
+| `PATCH` | `/leads/settings` | `workspace.manage` | edit the above + `version` |
+| `POST` | `/leads` | `crm.create` | manual capture; passing `ownerId` also needs `leads.reassign` |
+| `PATCH` | `/leads/:id` | `crm.edit` | edit fields + `version` |
+| `POST` | `/leads/:id/assign` | `leads.reassign` | manual (re)assignment: `{ "ownerId": "…" }` |
+| `POST` | `/leads/:id/acknowledge` | `leads.view` | only the current owner (or a reassigner) may acknowledge |
+| `POST` | `/leads/:id/close` | `crm.edit` | closes the lead and cancels its timer |
+
+### `POST /public/leads?workspace=<slug>` — public intake (F3.1)
+
+No session. The hosted intake form posts here; body `{ name, phone?, email?, message? }`
+with a phone **or** an email required. The workspace is resolved from the `?workspace=`
+slug, so one public endpoint serves every tenant. Creates the lead with source `WEB_FORM`
+and runs the same assignment flow.
+
+## Members — `/users` (F3.2, F3.6)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| `GET` | `/users?availability=&roleId=` | `leads.view` | member list for assignment pickers |
+| `PATCH` | `/users/:id/availability` | self, or `users.manage` | set `AVAILABLE` \| `BUSY` \| `ON_LEAVE` \| `OFFLINE` |
+
+Setting a member to `ON_LEAVE` or `OFFLINE` immediately reassigns their unacknowledged
+leads to someone available (F3.6); acknowledged leads are kept. Members who are not
+`AVAILABLE` never receive new leads (F3.3).
+
 ## Audit — `/audit` (F4)
 
 `GET /audit` (requires `audit.view`) returns the append-only history, newest first,
@@ -221,5 +263,5 @@ Seeded: 5 companies, 10 contacts, 12 opportunities across 5 pipeline stages, 4 l
 
 ## Planned next (not yet implemented)
 
-`/workspaces`, `/users`, `/roles`, `/leads`, `/dashboard`, `/integrations`. Each will
-follow the same envelope, pagination and error shape.
+`/workspaces`, `/roles`, `/dashboard`, `/integrations`. Each will follow the same
+envelope, pagination and error shape.

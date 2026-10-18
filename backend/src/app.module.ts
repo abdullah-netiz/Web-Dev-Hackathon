@@ -9,6 +9,8 @@ import { CrmModule } from './crm/crm.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { PrismaModule } from './common/prisma.module';
 import { JobsModule } from './jobs/jobs.module';
+import { LeadsModule } from './leads/leads.module';
+import { UsersModule } from './users/users.module';
 import { HealthController } from './health/health.controller';
 import { MetaController } from './meta/meta.controller';
 
@@ -37,6 +39,8 @@ import { MetaController } from './meta/meta.controller';
     AuthModule,
     AuditModule,
     CrmModule,
+    LeadsModule,
+    UsersModule,
   ],
   controllers: [HealthController, MetaController],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
