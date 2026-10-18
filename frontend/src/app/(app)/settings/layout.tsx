@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { Permission } from "@/lib/api/types";
 import { useCan } from "@/lib/session";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/misc";
 
 const ITEMS: { href: string; label: string; perm?: Permission }[] = [
   { href: "/settings/profile", label: "Profile and alerts" },
@@ -22,6 +23,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const can = useCan();
   const items = ITEMS.filter((i) => !i.perm || can(i.perm));
+  const current = ITEMS.find((i) => i.href === pathname);
+  const blocked = !!current?.perm && !can(current.perm);
   return (
     <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[14rem_minmax(0,1fr)]">
       <nav aria-label="Settings" className="lg:sticky lg:top-10 lg:self-start">
@@ -44,7 +47,16 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         </ul>
         {items.length < ITEMS.length && <p className="mt-4 hidden text-[13px] text-ink-soft lg:block">Some settings are hidden because your role doesn&apos;t include them.</p>}
       </nav>
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0">
+        {blocked ? (
+          <EmptyState
+            title={`${current!.label} is restricted.`}
+            body="Your role doesn't include this permission. Ask an Owner or Admin to grant it in Settings → Roles and permissions."
+          />
+        ) : (
+          children
+        )}
+      </div>
     </div>
   );
 }

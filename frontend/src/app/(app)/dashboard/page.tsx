@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import type { Appointment, Availability, DashboardMetrics } from "@/lib/api/types";
-import { useMe } from "@/lib/session";
+import { useCan, useMe } from "@/lib/session";
 import { cn, formatCompactMoney, formatDateTime, formatDuration, formatMoney } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/controls";
 import { Menu, MenuContent, MenuLabel, MenuTrigger } from "@/components/ui/menu";
@@ -81,7 +81,7 @@ function Sparkline({ data }: { data: DashboardMetrics["responseTrend"] }) {
       </svg>
       {h && (
         <div className="pointer-events-none absolute -top-12 rounded-[3px] bg-ink px-2.5 py-1.5 text-[12px] whitespace-nowrap text-paper" style={{ left: `clamp(0px, calc(${(hover! / (data.length - 1)) * 100}% - 60px), calc(100% - 140px))` }}>
-          {new Date(h.day).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: {h.avgSec != null ? formatDuration(h.avgSec) : "no responses"} · {h.leads} leads
+          {new Date(`${h.day}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" })}: {h.avgSec != null ? formatDuration(h.avgSec) : "no responses"} · {h.leads} leads
         </div>
       )}
       <div className="mt-1 flex justify-between text-[12px] text-ink-faint">
@@ -216,6 +216,7 @@ function AppointmentCard({ a, tz }: { a: Appointment; tz: string }) {
 
 function Dashboard() {
   const me = useMe();
+  const can = useCan();
   const qc = useQueryClient();
   const params = useSearchParams();
   const metrics = useQuery({ queryKey: ["dashboard", "metrics"], queryFn: () => api().dashboard.metrics(), refetchInterval: 20_000 });
@@ -303,7 +304,7 @@ function Dashboard() {
                 note={m!.recoveryCount ? "Overdue, escalated twice, or idle" : "Nothing has slipped"}
               />
             )}
-            {show("escalations") && <Tile i={i++} href="/audit?action=LEAD_ESCALATED" label="Escalations, last 24 hours" value={m!.escalations24h} note="Automatic hand-offs after a missed window" />}
+            {show("escalations") && <Tile i={i++} href={can("audit.view") ? "/audit?action=LEAD_ESCALATED" : "/leads"} label="Escalations, last 24 hours" value={m!.escalations24h} note="Automatic hand-offs after a missed window" />}
           </div>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

@@ -33,6 +33,7 @@ import {
 } from "./engine";
 
 const TOKEN_KEY = "baton.mock.token";
+const failedLogins = new Map<string, number[]>();
 const wait = (ms = 140 + Math.random() * 220) => new Promise((r) => setTimeout(r, ms));
 const now = () => new Date().toISOString();
 
@@ -182,7 +183,7 @@ function computeMetrics(c: ReturnType<typeof ctx>): DashboardMetrics {
     const inDay = leads.filter((l) => new Date(l.createdAt) >= start && new Date(l.createdAt) < end);
     const r = inDay.filter((l) => l.timeToFirstResponseSec != null);
     trend.push({
-      day: start.toISOString().slice(0, 10),
+      day: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`,
       leads: inDay.length,
       avgSec: r.length ? Math.round(r.reduce((s, l) => s + l.timeToFirstResponseSec!, 0) / r.length) : null,
     });
@@ -231,10 +232,11 @@ function busyFor(db: MockDB, W: string, userId: string, from: string, to: string
   return slots.filter((s) => s.end > from && s.start < to);
 }
 
-let ticker: ReturnType<typeof setInterval> | null = null;
+const TG = globalThis as { __batonTicker?: ReturnType<typeof setInterval> };
 function ensureTicker() {
-  if (ticker || typeof window === "undefined") return;
-  ticker = setInterval(() => tick(loadDB()), 1000);
+  if (typeof window === "undefined") return;
+  if (TG.__batonTicker) clearInterval(TG.__batonTicker);
+  TG.__batonTicker = setInterval(() => tick(loadDB()), 1000);
 }
 
 function scheduleDelivery(workspaceId: string, msgId: string, outcome: "ok" | "fail") {
@@ -274,10 +276,18 @@ export function createMockApi(): Api {
       async login({ email, password }) {
         await wait(400);
         const db = loadDB();
-        const user = db.users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-        if (!user || user.password !== password) {
-          fail(401, "INVALID_CREDENTIALS", "That email and password don't match.", "Check both and try again. After 5 attempts you'll need to wait a minute.");
+        const key = email.trim().toLowerCase();
+        const recent = (failedLogins.get(key) ?? []).filter((t) => Date.now() - t < 60_000);
+        if (recent.length >= 5) {
+          const wait = Math.ceil((60_000 - (Date.now() - recent[0]!)) / 1000);
+          fail(429, "TOO_MANY_ATTEMPTS", "Too many failed attempts for this email.", `Wait ${wait} seconds, then try again.`);
         }
+        const user = db.users.find((u) => u.email.toLowerCase() === key);
+        if (!user || user.password !== password) {
+          failedLogins.set(key, [...recent, Date.now()]);
+          fail(401, "INVALID_CREDENTIALS", "That email and password don't match.", `Check both and try again. ${4 - recent.length > 0 ? `${4 - recent.length} attempt${4 - recent.length === 1 ? "" : "s"} left before a one-minute pause.` : "Next failure pauses logins for a minute."}`);
+        }
+        failedLogins.delete(key);
         if (!user.active) fail(403, "DEACTIVATED", "This account has been deactivated.", "Ask your workspace Owner to reactivate it.");
         return sessionFor(db, user.id);
       },

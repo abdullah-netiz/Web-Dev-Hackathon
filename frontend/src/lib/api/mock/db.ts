@@ -54,7 +54,7 @@ export interface MockDB {
   invites: { token: string; userId: string; workspaceId: string }[];
 }
 
-export const DB_VERSION = 5;
+export const DB_VERSION = 7;
 const STORAGE_KEY = "baton.mock.db";
 
 let seq = 0;
@@ -645,17 +645,17 @@ export function seed(): MockDB {
   }
 
   const convoLines: [("INBOUND" | "OUTBOUND"), string][][] = [
-    [["INBOUND", "Hi, is anyone available to talk about panels for my house?"], ["OUTBOUND", "Hi! This is Bilal from Northwind. Happy to help. Roughly what is your monthly electricity bill?"], ["INBOUND", "Around $280 in summer"], ["OUTBOUND", "That's a good fit. Could we book a free site survey Thursday morning?"]],
+    [["INBOUND", "Hi, is anyone available to talk about panels for my house?"], ["OUTBOUND", "Hi! Thanks for reaching out to Northwind. Happy to help. Roughly what is your monthly electricity bill?"], ["INBOUND", "Around $280 in summer"], ["OUTBOUND", "That's a good fit. Could we book a free site survey Thursday morning?"]],
     [["INBOUND", "Do you install batteries without panels?"], ["OUTBOUND", "We do. Most people pair it with panels, but a standalone battery works with time-of-use rates."], ["INBOUND", "Great, send me a price please"]],
     [["INBOUND", "Can you come Saturday?"], ["OUTBOUND", "Saturday at 10:00 works. I'll send a calendar invite."], ["INBOUND", "👍"]],
-    [["OUTBOUND", "Hi Ava, following up on the proposal we sent. Any questions?"]],
+    [["OUTBOUND", "Hi, just following up on the proposal we sent. Any questions so far?"]],
   ];
   for (let i = 0; i < 14; i++) {
     const contact = db.contacts[(i * 9 + 2) % db.contacts.length]!;
     const assignee = db.users.find((u) => u.id === contact.ownerId)!;
     const lines = convoLines[i % convoLines.length]!;
     const convId = `cv_${i}`;
-    const start = now - between(10, 60 * 24 * 4) * 60_000;
+    const start = now - (i % 2 === 0 ? between(10, 300) : between(60 * 26, 60 * 24 * 4)) * 60_000;
     lines.forEach(([direction, body], j) => {
       const failed = i === 3 && j === lines.length - 1;
       db.messages.push({
@@ -883,44 +883,53 @@ export function seed(): MockDB {
   return db;
 }
 
-let cache: MockDB | null = null;
+const G = globalThis as { __batonDb?: MockDB | null };
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function loadDB(): MockDB {
-  if (cache) return cache;
+  if (G.__batonDb) return G.__batonDb;
   if (typeof window !== "undefined") {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as MockDB;
         if (parsed.version === DB_VERSION) {
-          cache = parsed;
-          return cache;
+          G.__batonDb = parsed;
+          return G.__batonDb;
         }
       }
     } catch {
       // fall through to a fresh seed
     }
   }
-  cache = seed();
+  G.__batonDb = seed();
   persist();
-  return cache;
+  return G.__batonDb;
 }
 
-export function persist() {
-  if (typeof window === "undefined" || !cache) return;
+function writeNow() {
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
-    } catch {
-      // storage full or blocked: the demo keeps working in memory
-    }
-  }, 250);
+  saveTimer = null;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(G.__batonDb));
+  } catch {
+    // storage full or blocked: the demo keeps working in memory
+  }
+}
+
+let flushBound = false;
+export function persist() {
+  if (typeof window === "undefined" || !G.__batonDb) return;
+  if (!flushBound) {
+    flushBound = true;
+    window.addEventListener("pagehide", () => saveTimer && writeNow());
+  }
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeNow, 120);
 }
 
 export function resetDB() {
-  cache = seed();
+  G.__batonDb = seed();
   persist();
-  return cache;
+  return G.__batonDb;
 }

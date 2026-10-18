@@ -21,7 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import type { Permission } from "@/lib/api/types";
 import { useCan, useMe } from "@/lib/session";
@@ -187,6 +187,19 @@ function UserBlock() {
 export function AppShell({ children }: { children: ReactNode }) {
   const me = useMe();
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const main = document.getElementById("main");
+    if (!main) return;
+    const update = () => {
+      const h = main.querySelector("h1")?.textContent?.trim();
+      const next = h ? `${h} · Baton` : "Baton";
+      if (document.title !== next) document.title = next;
+    };
+    update();
+    const mo = new MutationObserver(update);
+    mo.observe(main, { subtree: true, childList: true, characterData: true });
+    return () => mo.disconnect();
+  }, []);
   return (
     <div className="flex min-h-dvh w-full">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-teal focus:px-3 focus:py-2 focus:text-on-teal">
