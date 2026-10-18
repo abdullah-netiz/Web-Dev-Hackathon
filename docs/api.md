@@ -97,6 +97,20 @@ Request:
 Failures: `400 validation_error` (bad shape), `401 invalid_credentials` (generic —
 never reveals whether the email exists), `429 too_many_requests` after 5 attempts.
 
+### `POST /auth/signup` — public, rate limited (5/min per email + IP)
+
+Creates a new company workspace and makes the caller its **Owner** in one transaction
+(F1.1). The workspace is provisioned with settings and two built-in roles (`Admin`, `User`);
+later members are invited through `/members`.
+
+```jsonc
+{ "workspaceName": "Acme Services", "name": "Omar Owner",
+  "email": "omar@acme.test", "password": "Password123!" }
+```
+
+`201` returns the same `{ data: { token, user } }` shape as login, with `user.baseLevel: "OWNER"`
+and the full permission list. `409 conflict` if the email already has an account.
+
 ### `POST /auth/logout`
 Revokes the current session. `{ "data": { "ok": true } }`. The token is dead afterwards.
 
@@ -237,6 +251,46 @@ Setting a member to `ON_LEAVE` or `OFFLINE` immediately reassigns their unacknow
 leads to someone available (F3.6); acknowledged leads are kept. Members who are not
 `AVAILABLE` never receive new leads (F3.3).
 
+## Workspace settings — `/workspace` (F1.3, F1.2, Q6)
+
+| Method | Path | Permission | Notes |
+|---|---|---|---|
+| `GET` | `/workspace` | `workspace.manage` | name, `slug` (for the public intake form) and lead settings |
+| `PATCH` | `/workspace` | `workspace.manage` | rename + tune `ackWindowSec`, `escalationLevels`, `idlePeriodSec`, `maxOpenLeads`, `acknowledgedOnLeavePolicy` |
+
+`PATCH` uses optimistic concurrency: send the `version` from the last `GET`; a
+stale value returns `409 conflict` (Q4). This is the general settings surface; the
+lead-specific all-in-one lives at `/leads/settings`.
+
+## Members — `/members` (F1.2, F1.7)
+
+Only users with `users.manage` may see or change members.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/members?q=&baseLevel=&availability=&roleId=&includeInactive=` | paginated member directory |
+| `POST` | `/members` | invite: `{ name, email, password, baseLevel: "ADMIN"\|"USER", roleId? }` |
+| `PATCH` | `/members/:id` | `{ name?, baseLevel?, roleId?, telegramChatId?, availability?, version }` |
+| `POST` | `/members/:id/deactivate` | blocks the Owner; revokes sessions; reassigns unacknowledged leads first |
+| `POST` | `/members/:id/reactivate` | restores an active account |
+
+Inviting without a `roleId` assigns the built-in role matching the level. An **Admin
+cannot modify the Owner** and no one can deactivate the Owner or demote the last owner
+(F1.2). Every change writes an audit event.
+
+## Roles — `/roles` (F1.3)
+
+`roles.manage` only (Owner, or any role granted it). Permissions are keys from
+`GET /meta/permissions`; an unknown key is rejected with `400` so a rename can never
+silently grant access.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/roles` | roles with their `permissions` and member `_count` |
+| `POST` | `/roles` | `{ name, permissions: ["crm.view", …] }` |
+| `PATCH` | `/roles/:id` | `{ name?, permissions?, version }` — built-in roles can be re-permissioned but not renamed |
+| `DELETE` | `/roles/:id` | blocked (`409`) for built-in roles or roles still assigned to members |
+
 ## Dashboard — `/dashboard` (F5, Section 7)
 
 Every figure is computed from one definition in `backend/src/metrics/definitions.ts`, so
@@ -299,5 +353,5 @@ Seeded: 5 companies, 10 contacts, 12 opportunities across 5 pipeline stages, 4 l
 
 ## Planned next (not yet implemented)
 
-`/workspaces`, `/roles`, `/integrations`. Each will follow the same envelope, pagination
-and error shape.
+`/integrations` (Twilio WhatsApp, Stripe, Google Calendar, Telegram) and the Socket.IO
+real-time channel (Q11). Each will follow the same envelope, pagination and error shape.

@@ -1,12 +1,10 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import argon2 from 'argon2';
 import { PrismaService } from '../common/prisma.service';
+import { hashPassword, verifyPassword } from './password';
 import { toSessionUser } from './serializer';
 import { SessionService } from './session.service';
 import type { SessionUserProfile } from './types/session-user';
-
-const ARGON2_OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
 
 @Injectable()
 export class AuthService {
@@ -17,7 +15,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly sessions: SessionService,
   ) {
-    this.decoyHash = argon2.hash(randomBytes(24).toString('hex'), ARGON2_OPTIONS);
+    this.decoyHash = hashPassword(randomBytes(24).toString('hex'));
   }
 
   async login(
@@ -30,7 +28,7 @@ export class AuthService {
       include: { role: true },
     });
 
-    const passwordMatches = await argon2.verify(
+    const passwordMatches = await verifyPassword(
       user?.passwordHash ?? (await this.decoyHash),
       password,
     );
