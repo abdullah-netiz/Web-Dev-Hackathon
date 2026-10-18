@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f7f9f8;
+  --surface: #ebf0ee;
+  --surface-2: #dfe7e4;
+  --surface-3: #cfdad6;
+  --line: #d3ddda;
+  --ink: #0b2b30;
+  --ink-soft: #3d5a5f;
+  --ink-faint: #5f7a7e;
+  --teal: #06525c;
+  --teal-hover: #04434b;
+  --teal-tint: #d6e8e7;
+  --on-teal: #f7f9f8;
+  --signal: #b93a14;
+  --signal-tint: #fbe3da;
+  --ok: #1d6b45;
+  --ok-tint: #d9eee2;
+  --warn: #7a5200;
+  --warn-tint: #f6ead0;
+  --off: #55606a;
+  --off-tint: #e3e7ea;
+  --radius: 3px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-teal: var(--teal);
+  --color-teal-hover: var(--teal-hover);
+  --color-teal-tint: var(--teal-tint);
+  --color-on-teal: var(--on-teal);
+  --color-signal: var(--signal);
+  --color-signal-tint: var(--signal-tint);
+  --color-ok: var(--ok);
+  --color-ok-tint: var(--ok-tint);
+  --color-warn: var(--warn);
+  --color-warn-tint: var(--warn-tint);
+  --color-off: var(--off);
+  --color-off-tint: var(--off-tint);
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-zodiak), Georgia, serif;
+  --radius-DEFAULT: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --ease-out-quint: var(--ease-out);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--teal);
+  color: var(--on-teal);
+}
+
+:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialog-in {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(0.985); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
