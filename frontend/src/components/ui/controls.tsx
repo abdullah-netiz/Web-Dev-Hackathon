@@ -38,7 +38,10 @@ export function Checkbox({ className, ...props }: ComponentProps<typeof C.Root>)
   );
 }
 
-export const Tabs = T.Root;
+/** Never wider than its container; the list scrolls sideways on small screens (Q7). */
+export function Tabs({ className, ...props }: ComponentProps<typeof T.Root>) {
+  return <T.Root className={cn("min-w-0 max-w-full", className)} {...props} />;
+}
 export const TabsContent = T.Content;
 
 export function TabsList({ className, ...props }: ComponentProps<typeof T.List>) {

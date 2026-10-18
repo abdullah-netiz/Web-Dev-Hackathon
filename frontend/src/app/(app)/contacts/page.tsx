@@ -226,7 +226,7 @@ export default function ContactsPage() {
       ) : contacts.data.data.length === 0 ? (
         <EmptyState title="No contacts match." body="Loosen a filter or clear the search." action={<Button variant="outline" size="sm" onClick={() => (update(EMPTY), setQ(""))}>Clear filters</Button>} />
       ) : (
-        <div className={cn("overflow-x-auto transition-opacity", (contacts.isFetching || q !== dq) && "opacity-70")}>
+        <div className={cn("relative overflow-x-auto transition-opacity", (contacts.isFetching || q !== dq) && "opacity-70")}>
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-[13px] text-ink-soft">

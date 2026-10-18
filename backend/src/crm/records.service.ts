@@ -239,6 +239,9 @@ export class RecordsService {
     const opportunity = await this.prisma.opportunity.findFirst({ where: { id, workspaceId: auth.workspaceId }, include: { ...OPPORTUNITY_INCLUDE, payments: { orderBy: { createdAt: 'desc' } }, appointments: { orderBy: { startsAt: 'desc' } }, leads: { select: { id: true, status: true, currentAssigneeId: true } } } });
     if (!opportunity) throw new NotFoundException({ code: 'OPPORTUNITY_NOT_FOUND', message: 'Opportunity not found.' });
     const [masked] = this.maskValues(auth, [opportunity]);
+    // F1.4: payment amounts follow the same rule as the opportunity value
+    const canSeeValues = hasPermission(auth, 'crm.view_values');
+    (masked as unknown as { payments: unknown[] }).payments = opportunity.payments.map((payment) => (canSeeValues ? { ...payment, amount: Number(payment.amount), refundedAmount: Number(payment.refundedAmount) } : { ...payment, amount: null, refundedAmount: null, valueHidden: true }));
     const fields = await this.customFields.list(auth.workspaceId, 'OPPORTUNITY');
     return { ...masked, customFieldDefinitions: fields.filter((field) => !field.pipelineId || field.pipelineId === opportunity.pipelineId) };
   }
@@ -357,7 +360,7 @@ export class RecordsService {
       return value === null || value === undefined || value === '';
     });
     if (missing.length > 0) {
-      throw new DomainError('STAGE_REQUIREMENTS_UNMET', `Cannot move to "${stage.name}" until these fields are filled: ${missing.join(', ')}.`, 422, 'Fill the fields and try again.', );
+      throw new DomainError('REQUIRED_FIELDS_MISSING', `Cannot move to "${stage.name}" until these fields are filled: ${missing.join(', ')}.`, 422, 'Fill the fields and try again.', { missing, stage: stage.name });
     }
   }
 

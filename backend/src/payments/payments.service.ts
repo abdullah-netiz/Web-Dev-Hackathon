@@ -91,9 +91,13 @@ export class PaymentsService implements OnApplicationBootstrap {
       this.realtime.toWorkspace(auth.workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId, status: 'PENDING' });
       return this.mask(auth, updated);
     } catch (error) {
-      await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', failureReason: (error as Error).message } });
-      await this.events.record({ workspaceId: auth.workspaceId, provider: 'LEMONSQUEEZY', direction: 'OUT', type: 'checkout.failed', payload: { message: (error as Error).message }, relatedType: 'payment', relatedId: payment.id });
-      await this.connections.markHealth(auth.workspaceId, 'LEMONSQUEEZY', false, (error as Error).message);
+      // Record the failure, but never let bookkeeping hide the provider's explanation from the user (Q10)
+      const reason = (error as Error).message.slice(0, 500);
+      await Promise.allSettled([
+        this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', failureReason: reason } }),
+        this.events.record({ workspaceId: auth.workspaceId, provider: 'LEMONSQUEEZY', direction: 'OUT', type: 'checkout.failed', payload: { message: reason }, relatedType: 'payment', relatedId: payment.id }),
+        this.connections.markHealth(auth.workspaceId, 'LEMONSQUEEZY', false, reason),
+      ]);
       this.realtime.toWorkspace(auth.workspaceId, 'payment:updated', { paymentId: payment.id, opportunityId, status: 'FAILED' });
       throw error;
     }

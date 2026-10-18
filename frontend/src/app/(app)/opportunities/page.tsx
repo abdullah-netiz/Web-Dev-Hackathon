@@ -172,7 +172,7 @@ function Board() {
           <DragOverlay dropAnimation={{ duration: 220, easing: "cubic-bezier(0.22,1,0.36,1)" }}>{active ? <Card o={active} overlay /> : null}</DragOverlay>
         </DndContext>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-[13px] text-ink-soft">

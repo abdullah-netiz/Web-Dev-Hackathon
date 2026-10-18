@@ -19,9 +19,9 @@ function Payments() {
   const month = new Date();
   month.setDate(1);
   month.setHours(0, 0, 0, 0);
-  const collected = (all.data ?? []).filter((p) => p.paidAt && new Date(p.paidAt) >= month && ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + p.amount - p.refundedAmount, 0);
-  const awaiting = (all.data ?? []).filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0);
-  const refunded = (all.data ?? []).reduce((s, p) => s + p.refundedAmount, 0);
+  const collected = (all.data ?? []).filter((p) => p.paidAt && new Date(p.paidAt) >= month && ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + (p.amount ?? 0) - (p.refundedAmount ?? 0), 0);
+  const awaiting = (all.data ?? []).filter((p) => p.status === "PENDING").reduce((s, p) => s + (p.amount ?? 0), 0);
+  const refunded = (all.data ?? []).reduce((s, p) => s + (p.refundedAmount ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -60,7 +60,7 @@ function Payments() {
       ) : rows.length === 0 ? (
         <EmptyState title="No payments here." body="Request a payment from any opportunity." />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[820px] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-[13px] text-ink-soft">
@@ -76,7 +76,7 @@ function Payments() {
                 <tr key={p.id} className="border-b border-line/70 align-top">
                   <td className="tabular py-3 pr-4 font-semibold text-ink">
                     {formatMoney(p.amount, p.currency)}
-                    {p.refundedAmount > 0 && <span className="block text-[12.5px] font-normal text-ink-soft">−{formatMoney(p.refundedAmount, p.currency)} refunded</span>}
+                    {(p.refundedAmount ?? 0) > 0 && <span className="block text-[12.5px] font-normal text-ink-soft">−{formatMoney(p.refundedAmount, p.currency)} refunded</span>}
                   </td>
                   <td className="py-3 pr-4">
                     <PaymentTag value={p.status} />

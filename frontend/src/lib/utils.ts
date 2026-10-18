@@ -14,7 +14,9 @@ export function initials(name: string) {
     .join("");
 }
 
-export function formatMoney(amount: number, currency = "USD") {
+/** `null` means the viewer may not see amounts (F1.4). */
+export function formatMoney(amount: number | null, currency = "USD") {
+  if (amount === null) return "Hidden";
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,

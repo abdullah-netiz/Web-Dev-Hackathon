@@ -74,7 +74,7 @@ export default function RolesPage() {
       ) : roles.isError ? (
         <ErrorState error={roles.error} onRetry={() => roles.refetch()} />
       ) : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
             <caption className="sr-only">Permissions by role</caption>
             <thead>

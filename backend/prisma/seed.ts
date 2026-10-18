@@ -48,9 +48,13 @@ async function main() {
   if (!pipeline) {
     const created = await prisma.pipeline.create({ data: { workspaceId: workspace.id, name: 'Sales pipeline', isDefault: true } });
     const names: [string, boolean, boolean][] = [['New', false, false], ['Qualified', false, false], ['Proposal', false, false], ['Negotiation', false, false], ['Won', true, false], ['Lost', false, true]];
-    await prisma.pipelineStage.createMany({ data: names.map(([name, isWon, isLost], order) => ({ workspaceId: workspace.id, pipelineId: created.id, name, order, isWon, isLost, requiredFieldKeys: name === 'Proposal' ? ['value'] : [] })) });
+    await prisma.pipelineStage.createMany({ data: names.map(([name, isWon, isLost], order) => ({ workspaceId: workspace.id, pipelineId: created.id, name, order, isWon, isLost, requiredFieldKeys: name === 'Proposal' ? ['budget'] : name === 'Negotiation' ? ['decision_date'] : [] })) });
     pipeline = await prisma.pipeline.findFirstOrThrow({ where: { id: created.id }, include: { stages: { orderBy: { order: 'asc' } } } });
   }
+
+  // Required fields by stage (F2.4); applied on every run so older seeds get them too
+  await prisma.pipelineStage.updateMany({ where: { pipelineId: pipeline.id, name: 'Proposal' }, data: { requiredFieldKeys: ['budget'] } });
+  await prisma.pipelineStage.updateMany({ where: { pipelineId: pipeline.id, name: 'Negotiation' }, data: { requiredFieldKeys: ['decision_date'] } });
 
   const fields = [
     { entity: 'CONTACT' as const, key: 'preferred_channel', label: 'Preferred channel', type: 'DROPDOWN' as const, options: ['WhatsApp', 'Phone', 'Email'] },

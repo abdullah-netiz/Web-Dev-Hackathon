@@ -59,7 +59,7 @@ export function RealtimeBridge() {
           invalidate("payments", "dashboard", "opportunity", "contact", "opportunities");
           if (e.payment.status === "PAID") {
             toast.success(`Payment received from ${e.payment.contactName}`, {
-              description: new Intl.NumberFormat(undefined, { style: "currency", currency: e.payment.currency }).format(e.payment.amount),
+              description: e.payment.amount === null ? undefined : new Intl.NumberFormat(undefined, { style: "currency", currency: e.payment.currency }).format(e.payment.amount),
             });
           }
           break;

@@ -141,7 +141,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
 
   const { contact: c, company, opportunities, conversations, payments, appointments, leads, activities, owner } = q.data;
   const name = `${c.firstName} ${c.lastName}`.trim();
-  const collected = payments.filter((p) => ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + p.amount - p.refundedAmount, 0);
+  const collected = payments.filter((p) => ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + (p.amount ?? 0) - (p.refundedAmount ?? 0), 0);
   const openLead = leads.find((l) => l.status === "ASSIGNED");
 
   return (

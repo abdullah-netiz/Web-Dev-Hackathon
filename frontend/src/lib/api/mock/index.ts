@@ -166,9 +166,9 @@ function computeMetrics(c: ReturnType<typeof ctx>): DashboardMetrics {
   const openStages = stages.filter((s) => !s.isWon && !s.isLost);
   const payments = db.payments.filter((p) => p.workspaceId === W && (company || p.requestedById === user.id));
   const collected = payments.filter((p) => p.paidAt && new Date(p.paidAt) >= monthStart && ["PAID", "REFUNDED", "PARTIALLY_REFUNDED"].includes(p.status));
-  const collectedSum = collected.reduce((s, p) => s + p.amount - p.refundedAmount, 0);
+  const collectedSum = collected.reduce((s, p) => s + (p.amount ?? 0) - (p.refundedAmount ?? 0), 0);
   const openValue = opps.filter((o) => openStages.some((s) => s.id === o.stageId)).reduce((s, o) => s + (o.value ?? 0), 0);
-  const pendingPay = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0);
+  const pendingPay = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + (p.amount ?? 0), 0);
   const members = db.users.filter((u) => u.workspaceId === W && u.active);
   const availability = { AVAILABLE: 0, BUSY: 0, ON_LEAVE: 0, OFFLINE: 0 } as Record<Availability, number>;
   for (const m of members) availability[m.availability] += 1;
@@ -1393,7 +1393,7 @@ export function createMockApi(): Api {
         const db = loadDB();
         const p = db.payments.find((x) => x.providerReference === sessionId);
         if (!p) fail(404, "NOT_FOUND", "We couldn't find this payment.");
-        return { status: p.status, amount: p.amount, currency: p.currency, workspaceName: db.workspaces.find((w) => w.id === p.workspaceId)!.name };
+        return { status: p.status, amount: p.amount ?? 0, currency: p.currency, workspaceName: db.workspaces.find((w) => w.id === p.workspaceId)!.name };
       },
     },
 

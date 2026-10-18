@@ -52,8 +52,8 @@ export default function OpportunityPage({ params }: { params: Promise<{ id: stri
   const pipeline = pipelines.data?.find((p) => p.id === o.pipelineId);
   const stage = pipeline?.stages.find((s) => s.id === o.stageId);
   const dirty = JSON.stringify(custom) !== JSON.stringify(o.custom);
-  const collected = payments.filter((p) => ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + p.amount - p.refundedAmount, 0);
-  const pending = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0);
+  const collected = payments.filter((p) => ["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(p.status)).reduce((s, p) => s + (p.amount ?? 0) - (p.refundedAmount ?? 0), 0);
+  const pending = payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + (p.amount ?? 0), 0);
 
   return (
     <div className="mx-auto max-w-6xl">

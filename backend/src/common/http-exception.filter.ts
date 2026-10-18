@@ -8,6 +8,7 @@ export class DomainError extends Error {
     message: string,
     readonly status: number = HttpStatus.UNPROCESSABLE_ENTITY,
     readonly action?: string,
+    readonly details?: unknown,
   ) {
     super(message);
   }
@@ -25,6 +26,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         code: exception.code,
         message: exception.message,
         action: exception.action,
+        ...(exception.details !== undefined ? { details: exception.details } : {}),
       });
     }
 

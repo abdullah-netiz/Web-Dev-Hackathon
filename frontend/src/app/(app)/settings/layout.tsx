@@ -16,7 +16,7 @@ const ITEMS: { href: string; label: string; perm?: Permission }[] = [
   { href: "/settings/assignment", label: "Assignment rules", perm: "leads.manage_rules" },
   { href: "/settings/pipelines", label: "Pipelines and stages", perm: "settings.manage" },
   { href: "/settings/fields", label: "Custom fields", perm: "settings.manage" },
-  { href: "/settings/integrations", label: "Integrations", perm: "integrations.manage" },
+  { href: "/settings/integrations", label: "Integrations", perm: "integrations.view" },
 ];
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
@@ -26,8 +26,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const current = ITEMS.find((i) => i.href === pathname);
   const blocked = !!current?.perm && !can(current.perm);
   return (
-    <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[14rem_minmax(0,1fr)]">
-      <nav aria-label="Settings" className="lg:sticky lg:top-10 lg:self-start">
+    <div className="mx-auto grid max-w-6xl grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[14rem_minmax(0,1fr)]">
+      <nav aria-label="Settings" className="min-w-0 lg:sticky lg:top-10 lg:self-start">
         <h1 className="mb-4 text-[28px] font-semibold tracking-[-0.02em] text-ink">Settings</h1>
         <ul className="-mx-1 flex gap-1 overflow-x-auto pb-1 lg:mx-0 lg:flex-col lg:overflow-visible">
           {items.map((i) => {

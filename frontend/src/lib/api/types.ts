@@ -292,10 +292,11 @@ export interface Payment {
   contactName: string;
   requestedById: ID;
   requestedByName: string;
-  amount: number;
+  /** null when the viewer lacks crm.view_values (F1.4). */
+  amount: number | null;
   currency: string;
   status: PaymentStatus;
-  refundedAmount: number;
+  refundedAmount: number | null;
   /** Lemon Squeezy order id once paid, else the checkout id (I2.7). */
   providerReference: string;
   checkoutUrl: string | null;

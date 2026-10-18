@@ -265,7 +265,7 @@ export default function IntegrationsPage() {
         ) : events.isError ? (
           <ErrorState error={events.error} onRetry={() => events.refetch()} />
         ) : (
-          <div className="max-h-[480px] overflow-auto">
+          <div className="relative max-h-[480px] overflow-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="sticky top-0 bg-paper">
                 <tr className="border-b border-line text-[13px] text-ink-soft">

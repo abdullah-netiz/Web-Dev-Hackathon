@@ -19,7 +19,8 @@ async function bootstrap() {
   );
   app.useLogger(app.get(Logger));
   await app.register(helmet, { contentSecurityPolicy: false });
-  app.enableCors({ origin: env.CORS_ORIGINS, credentials: false });
+  // Explicit methods: the Fastify CORS plugin only allows GET, HEAD and POST by default, which breaks edits from the browser
+  app.enableCors({ origin: env.CORS_ORIGINS, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization', 'Accept'], credentials: false, maxAge: 600 });
   app.useGlobalPipes(new ZodValidationPipe());
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableShutdownHooks();
