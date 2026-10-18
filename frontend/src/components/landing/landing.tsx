@@ -188,7 +188,7 @@ export function Landing() {
   );
 
   return (
-    <div ref={root} className="bg-paper text-ink">
+    <div ref={root} data-theme="light" className="bg-paper text-ink">
       <SmoothScroll />
       <header className={cn("fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between px-4 transition-colors duration-300 sm:px-8 lg:px-12", onDark ? "text-paper" : "text-ink")}>
         <Link href="/" className="flex items-center gap-2" aria-label="Baton home">

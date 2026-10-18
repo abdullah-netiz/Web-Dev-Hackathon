@@ -79,11 +79,11 @@ export default function AssignmentPage() {
               <motion.div
                 key={i}
                 layout
-                className={i === 0 ? "bg-teal" : i === steps.length - 1 && i > 0 ? "bg-ink" : "bg-[#2f737d]"}
+                className={i === 0 ? "bg-teal text-on-teal" : i === steps.length - 1 && i > 0 ? "bg-ink text-paper" : "bg-[#2f737d] text-white"}
                 style={{ flexGrow: Math.max(s.sec, total * 0.08), flexBasis: 0 }}
                 transition={{ type: "spring", stiffness: 300, damping: 34 }}
               >
-                <span className="block p-2 text-[13px] font-semibold text-paper">{formatDuration(s.sec)}</span>
+                <span className="block p-2 text-[13px] font-semibold">{formatDuration(s.sec)}</span>
               </motion.div>
             ))}
           </div>

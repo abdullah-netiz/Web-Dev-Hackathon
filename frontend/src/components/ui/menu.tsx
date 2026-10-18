@@ -14,7 +14,7 @@ export function MenuContent({ children, align = "end", className }: { children: 
         align={align}
         sideOffset={6}
         className={cn(
-          "z-50 min-w-48 rounded-[3px] bg-paper p-1 text-sm text-ink shadow-[0_16px_40px_-12px_rgba(11,43,48,0.35)] ring-1 ring-line",
+          "z-50 min-w-48 rounded-[3px] bg-paper p-1 text-sm text-ink shadow-float ring-1 ring-line",
           "data-[state=open]:animate-[pop-in_160ms_cubic-bezier(0.22,1,0.36,1)]",
           className,
         )}

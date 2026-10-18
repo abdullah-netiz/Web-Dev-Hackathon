@@ -7,12 +7,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
-import type { Availability, DashboardMetrics } from "@/lib/api/types";
+import type { Appointment, Availability, DashboardMetrics } from "@/lib/api/types";
 import { useMe } from "@/lib/session";
 import { cn, formatCompactMoney, formatDateTime, formatDuration, formatMoney } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/controls";
 import { Menu, MenuContent, MenuLabel, MenuTrigger } from "@/components/ui/menu";
-import { ErrorState, PageHeader, Skeleton } from "@/components/ui/misc";
+import { Avatar, ErrorState, PageHeader, Skeleton } from "@/components/ui/misc";
 import { AVAILABILITY } from "@/components/ui/status";
 
 const FIGURES = [
@@ -46,9 +46,9 @@ function Tile({ href, label, value, note, i, className, children }: { href?: str
     </>
   );
   return (
-    <motion.div {...rise(i)} className={cn("bg-paper", className)}>
+    <motion.div {...rise(i)} className={cn("rounded-[3px] bg-surface", className)}>
       {href ? (
-        <Link href={href} className="group block h-full p-5 transition-colors hover:bg-surface/70 md:p-6">
+        <Link href={href} className="group block h-full p-5 transition-colors hover:bg-surface-2 md:p-6">
           {body}
           <span className="sr-only">, open the list</span>
         </Link>
@@ -178,6 +178,42 @@ function AvailabilityBar({ m }: { m: DashboardMetrics }) {
   );
 }
 
+function dayLabel(iso: string, tz: string) {
+  const fmt = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  const day = fmt(new Date(iso));
+  if (day === fmt(new Date())) return "Today";
+  if (day === fmt(new Date(Date.now() + 86_400_000))) return "Tomorrow";
+  return new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone: tz }).format(new Date(iso));
+}
+
+function AppointmentCard({ a, tz }: { a: Appointment; tz: string }) {
+  const d = new Date(a.startsAt);
+  const part = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(undefined, { ...o, timeZone: tz }).format(d);
+  const mins = Math.round((new Date(a.endsAt).getTime() - d.getTime()) / 60_000);
+  const label = dayLabel(a.startsAt, tz);
+  return (
+    <Link href={`/contacts/${a.contactId}`} className="group flex h-full flex-col rounded-[3px] bg-paper p-4 transition-colors hover:bg-surface-2">
+      <div className="flex items-start gap-3">
+        <div className={cn("flex w-12 shrink-0 flex-col items-center rounded-[3px] py-1.5", label === "Today" ? "bg-teal text-on-teal" : "bg-surface-2 text-ink")}>
+          <span className="text-[11px] font-semibold uppercase">{part({ month: "short" })}</span>
+          <span className="tabular text-xl leading-none font-semibold">{part({ day: "numeric" })}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-soft">{label}</p>
+          <p className="tabular text-lg leading-tight font-semibold text-ink">{part({ hour: "numeric", minute: "2-digit" })}</p>
+          <p className="text-[12px] text-ink-soft">{mins} min</p>
+        </div>
+      </div>
+      <p className="mt-4 truncate text-[15px] font-semibold text-ink group-hover:underline">{a.title}</p>
+      <p className="truncate text-sm text-ink-soft">{a.contactName}</p>
+      <div className="mt-auto flex items-center gap-2 pt-4">
+        <Avatar name={a.userName} size={22} />
+        <span className="truncate text-[13px] text-ink">{a.userName}</span>
+      </div>
+    </Link>
+  );
+}
+
 function Dashboard() {
   const me = useMe();
   const qc = useQueryClient();
@@ -234,9 +270,9 @@ function Dashboard() {
       />
 
       {metrics.isPending ? (
-        <div className="grid gap-px bg-line md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4">
           {Array.from({ length: 8 }, (_, k) => (
-            <div key={k} className="bg-paper p-6">
+            <div key={k} className="rounded-[3px] bg-surface p-6">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="mt-4 h-10 w-24" />
             </div>
@@ -245,8 +281,8 @@ function Dashboard() {
       ) : metrics.isError ? (
         <ErrorState error={metrics.error} onRetry={() => metrics.refetch()} />
       ) : (
-        <div className="flex flex-col gap-px bg-line">
-          <div className="grid gap-px md:grid-cols-2 xl:grid-cols-4">
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {show("newLeads") && <Tile i={i++} href="/leads" label="New leads today" value={m!.newLeadsToday} note="Web form, WhatsApp and manual entries since midnight" />}
             {show("response") && (
               <Tile
@@ -270,9 +306,9 @@ function Dashboard() {
             {show("escalations") && <Tile i={i++} href="/audit?action=LEAD_ESCALATED" label="Escalations, last 24 hours" value={m!.escalations24h} note="Automatic hand-offs after a missed window" />}
           </div>
 
-          <div className="grid gap-px lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
             {show("pipeline") && (
-              <motion.section {...rise(i++)} className="bg-paper p-5 md:p-6" aria-labelledby="pipe-h">
+              <motion.section {...rise(i++)} className="rounded-[3px] bg-surface p-5 md:p-6" aria-labelledby="pipe-h">
                 <h2 id="pipe-h" className="text-sm text-ink-soft">
                   Open pipeline by stage
                 </h2>
@@ -285,7 +321,7 @@ function Dashboard() {
                 </div>
               </motion.section>
             )}
-            <div className="grid gap-px">
+            <div className="grid gap-3">
               {show("collected") && (
                 <Tile
                   i={i++}
@@ -305,8 +341,8 @@ function Dashboard() {
                 />
               )}
               {show("availability") && (
-                <motion.section {...rise(i++)} className="bg-paper" aria-labelledby="avail-h">
-                  <Link href="/team" className="group block p-5 hover:bg-surface/70 md:p-6">
+                <motion.section {...rise(i++)} className="rounded-[3px] bg-surface" aria-labelledby="avail-h">
+                  <Link href="/team" className="group block p-5 hover:bg-surface-2 md:p-6">
                     <h2 id="avail-h" className="flex items-center justify-between text-sm text-ink-soft">
                       Team availability <ArrowUpRightIcon size={16} className="text-ink-faint group-hover:text-teal" aria-hidden />
                     </h2>
@@ -320,7 +356,7 @@ function Dashboard() {
           </div>
 
           {show("appointments") && (
-            <motion.section {...rise(i++)} className="bg-paper p-5 md:p-6" aria-labelledby="appt-h">
+            <motion.section {...rise(i++)} className="rounded-[3px] bg-surface p-5 md:p-6" aria-labelledby="appt-h">
               <div className="flex items-center justify-between">
                 <h2 id="appt-h" className="text-sm text-ink-soft">
                   Upcoming appointments
@@ -330,17 +366,11 @@ function Dashboard() {
                 </Link>
               </div>
               {m!.upcomingAppointments.length ? (
-                <ul className="mt-4 grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-5">
-                  {m!.upcomingAppointments.map((a) => (
-                    <li key={a.id} className="bg-paper py-3 pr-4 sm:py-0">
-                      <Link href={`/contacts/${a.contactId}`} className="block hover:underline">
-                        <p className="tabular text-[15px] font-semibold text-ink">{formatDateTime(a.startsAt, me.user.timeZone)}</p>
-                        <p className="mt-0.5 text-sm text-ink">
-                          {a.title} · {a.contactName}
-                        </p>
-                        <p className="text-[13px] text-ink-soft">with {a.userName}</p>
-                      </Link>
-                    </li>
+                <ul className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  {m!.upcomingAppointments.map((a, k) => (
+                    <motion.li key={a.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 + k * 0.06, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}>
+                      <AppointmentCard a={a} tz={me.user.timeZone} />
+                    </motion.li>
                   ))}
                 </ul>
               ) : (

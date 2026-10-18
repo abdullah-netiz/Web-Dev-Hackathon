@@ -46,8 +46,8 @@ export function LeadForm({ slug }: { slug: string }) {
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <section className="flex flex-col justify-between bg-teal px-5 py-8 text-paper sm:px-10 lg:px-14 lg:py-12">
-        <div className="flex items-center gap-2 text-paper">
+      <section className="flex flex-col justify-between bg-brand px-5 py-8 text-on-brand sm:px-10 lg:px-14 lg:py-12">
+        <div className="flex items-center gap-2 text-on-brand">
           <BatonMark className="h-5 w-5" />
           <span className="text-[15px] font-medium">{ws.data ? ws.data.name : <Skeleton className="h-4 w-32 opacity-30" />}</span>
         </div>
@@ -56,15 +56,15 @@ export function LeadForm({ slug }: { slug: string }) {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="display max-w-[12ch] text-[52px] text-paper sm:text-[72px] xl:text-[88px]"
+            className="display max-w-[12ch] text-[52px] text-on-brand sm:text-[72px] xl:text-[88px]"
           >
             Ask us anything.
           </motion.h1>
-          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="mt-6 max-w-md text-lg leading-relaxed text-paper/85">
+          <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.7, ease: [0.22, 1, 0.36, 1] }} className="mt-6 max-w-md text-lg leading-relaxed text-on-brand/85">
             The moment you send this, one named person on our team becomes responsible for replying to you. If they can&apos;t, it goes straight to someone who can.
           </motion.p>
         </div>
-        <p className="hidden text-[13px] text-paper/60 lg:block">Your details are used only to reply to this request.</p>
+        <p className="hidden text-[13px] text-on-brand/60 lg:block">Your details are used only to reply to this request.</p>
       </section>
 
       <section className="flex items-center px-5 py-10 sm:px-10 lg:px-14">

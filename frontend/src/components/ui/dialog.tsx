@@ -24,10 +24,10 @@ export function DialogContent({
 }) {
   return (
     <D.Portal>
-      <D.Overlay className="fixed inset-0 z-40 bg-ink/35 data-[state=open]:animate-[fade-in_180ms_ease-out]" />
+      <D.Overlay className="fixed inset-0 z-40 bg-black/45 data-[state=open]:animate-[fade-in_180ms_ease-out]" />
       <D.Content
         className={cn(
-          "fixed z-50 flex flex-col bg-paper text-ink shadow-[0_24px_64px_-24px_rgba(11,43,48,0.5)] focus:outline-none",
+          "fixed z-50 flex flex-col bg-paper text-ink shadow-float ring-1 ring-line focus:outline-none",
           side === "right"
             ? "inset-y-0 right-0 w-full max-w-lg data-[state=open]:animate-[slide-in-right_260ms_cubic-bezier(0.22,1,0.36,1)]"
             : "top-1/2 left-1/2 max-h-[min(92dvh,760px)] w-[calc(100vw-24px)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-[3px] data-[state=open]:animate-[dialog-in_220ms_cubic-bezier(0.22,1,0.36,1)]",

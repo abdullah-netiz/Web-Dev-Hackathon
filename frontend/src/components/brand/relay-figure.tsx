@@ -50,21 +50,21 @@ export function RelayFigure({ tone = "dark" }: { tone?: "dark" | "light" }) {
   const dark = tone === "dark";
   return (
     <div ref={root} className="relative w-full max-w-md" data-ui aria-hidden>
-      <div className={dark ? "text-[13px] text-paper/70" : "text-[13px] text-ink-soft"}>Lead · Camila Ortiz · Web form</div>
+      <div className={dark ? "text-[13px] text-on-brand/70" : "text-[13px] text-ink-soft"}>Lead · Camila Ortiz · Web form</div>
       <div className="relative mt-3">
-        <div className={`js-baton absolute top-0 left-0 z-10 h-1/3 w-[6px] ${dark ? "bg-[#f2c94c]" : "bg-teal"}`} />
+        <div className={`js-baton absolute top-0 left-0 z-10 h-1/3 w-[6px] ${dark ? "bg-brand-accent" : "bg-teal"}`} />
         {LANES.map((lane, i) => (
-          <div key={lane.name} className={`relative flex h-[76px] items-center gap-4 pl-6 ${i ? (dark ? "mt-0 border-t border-paper/12" : "border-t border-line") : ""}`}>
+          <div key={lane.name} className={`relative flex h-[76px] items-center gap-4 pl-6 ${i ? (dark ? "mt-0 border-t border-on-brand/12" : "border-t border-line") : ""}`}>
             <div className="min-w-0 flex-1">
-              <div className={dark ? "text-[17px] font-medium text-paper" : "text-[17px] font-medium text-ink"}>{lane.name}</div>
-              <div className={`js-note text-[13px] ${dark ? "text-[#f2c94c]" : "text-signal"}`}>
+              <div className={dark ? "text-[17px] font-medium text-on-brand" : "text-[17px] font-medium text-ink"}>{lane.name}</div>
+              <div className={`js-note text-[13px] ${dark ? "text-brand-accent" : "text-signal"}`}>
                 {i < LANES.length - 1 ? "No response — handed on" : "Acknowledged in 0:41"}
               </div>
             </div>
             <div className="w-28 shrink-0">
-              <div className={dark ? "text-right text-[12px] text-paper/60" : "text-right text-[12px] text-ink-soft"}>{lane.role}</div>
-              <div className={`mt-1.5 h-1.5 w-full ${dark ? "bg-paper/15" : "bg-surface-2"}`}>
-                <div className={`js-clock h-full w-full origin-left ${dark ? "bg-paper" : "bg-teal"}`} />
+              <div className={dark ? "text-right text-[12px] text-on-brand/60" : "text-right text-[12px] text-ink-soft"}>{lane.role}</div>
+              <div className={`mt-1.5 h-1.5 w-full ${dark ? "bg-on-brand/15" : "bg-surface-2"}`}>
+                <div className={`js-clock h-full w-full origin-left ${dark ? "bg-on-brand" : "bg-teal"}`} />
               </div>
             </div>
           </div>

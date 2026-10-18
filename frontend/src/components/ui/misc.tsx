@@ -3,7 +3,7 @@ import { describeError } from "@/lib/api/errors";
 import { cn, initials } from "@/lib/utils";
 import { Button } from "./button";
 
-const AVATAR_TONES = ["bg-teal text-on-teal", "bg-[#2f6f5e] text-paper", "bg-[#7c5c2e] text-paper", "bg-[#3d5a5f] text-paper", "bg-[#8a3b2a] text-paper", "bg-[#4b5d7a] text-paper"];
+const AVATAR_TONES = ["bg-teal text-on-teal", "bg-[#2f6f5e] text-white", "bg-[#7c5c2e] text-white", "bg-[#3d5a5f] text-white", "bg-[#8a3b2a] text-white", "bg-[#4b5d7a] text-white"];
 
 export function Avatar({ name, size = 28, className }: { name: string; size?: number; className?: string }) {
   let h = 0;

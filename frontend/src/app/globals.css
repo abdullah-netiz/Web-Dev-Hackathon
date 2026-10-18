@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 :root {
+  --brand: #06525c;
+  --on-brand: #f7f9f8;
+  --brand-accent: #f2c94c;
+  --radius: 3px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --on-signal: #ffffff;
+  --shadow-float: 0 16px 40px -12px rgba(11, 43, 48, 0.35);
   --paper: #f7f9f8;
   --surface: #ebf0ee;
   --surface-2: #dfe7e4;
@@ -21,12 +34,72 @@
   --warn-tint: #f6ead0;
   --off: #55606a;
   --off-tint: #e3e7ea;
-  --radius: 3px;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --on-signal: #1a0d08;
+  --shadow-float: 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+  --paper: #0d1719;
+  --surface: #142124;
+  --surface-2: #1b2c30;
+  --surface-3: #2a4247;
+  --line: #22363a;
+  --ink: #e4eeec;
+  --ink-soft: #a6bab8;
+  --ink-faint: #7c9390;
+  --teal: #5cb2b0;
+  --teal-hover: #7cc6c4;
+  --teal-tint: #15373a;
+  --on-teal: #04262a;
+  --signal: #ff8f6b;
+  --signal-tint: #3a1d14;
+  --ok: #6ccf98;
+  --ok-tint: #12301f;
+  --warn: #e6b85c;
+  --warn-tint: #332810;
+  --off: #9aa7ae;
+  --off-tint: #212c31;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --on-signal: #1a0d08;
+    --shadow-float: 0 18px 44px -12px rgba(0, 0, 0, 0.7);
+    --paper: #0d1719;
+    --surface: #142124;
+    --surface-2: #1b2c30;
+    --surface-3: #2a4247;
+    --line: #22363a;
+    --ink: #e4eeec;
+    --ink-soft: #a6bab8;
+    --ink-faint: #7c9390;
+    --teal: #5cb2b0;
+    --teal-hover: #7cc6c4;
+    --teal-tint: #15373a;
+    --on-teal: #04262a;
+    --signal: #ff8f6b;
+    --signal-tint: #3a1d14;
+    --ok: #6ccf98;
+    --ok-tint: #12301f;
+    --warn: #e6b85c;
+    --warn-tint: #332810;
+    --off: #9aa7ae;
+    --off-tint: #212c31;
+  }
+}
+
+html {
+  transition: background-color 0.25s var(--ease-out);
 }
 
 @theme inline {
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
+  --color-brand-accent: var(--brand-accent);
+  --color-on-signal: var(--on-signal);
+  --shadow-float: var(--shadow-float);
   --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);

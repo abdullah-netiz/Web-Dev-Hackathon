@@ -9,6 +9,7 @@ import { api, describeError } from "@/lib/api";
 import { useMe } from "@/lib/session";
 import { AvailabilitySwitch } from "@/components/app/availability-switch";
 import { SettingsSection } from "@/components/app/section";
+import { ThemeSwitch } from "@/components/app/theme-switch";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/misc";
 import { Tag } from "@/components/ui/status";
@@ -57,6 +58,10 @@ export default function ProfilePage() {
             <AvailabilitySwitch user={u} />
           </div>
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Appearance" description="System follows your device's light or dark setting. Saved on this device.">
+        <ThemeSwitch withLabels className="w-fit" />
       </SettingsSection>
 
       <SettingsSection

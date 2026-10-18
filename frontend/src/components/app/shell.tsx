@@ -32,6 +32,7 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } fr
 import { Avatar } from "@/components/ui/misc";
 import { AvailabilitySwitch } from "./availability-switch";
 import { DemoPanel } from "./demo-panel";
+import { ThemeSwitch } from "./theme-switch";
 
 interface NavItem {
   href: string;
@@ -128,7 +129,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                         <span
                           className={cn(
                             "tabular min-w-5 rounded-[3px] px-1.5 text-center text-[12px] leading-5 font-semibold",
-                            item.count === "recovery" ? "bg-signal text-white" : "bg-teal text-on-teal",
+                            item.count === "recovery" ? "bg-signal text-on-signal" : "bg-teal text-on-teal",
                           )}
                           aria-label={`${n} ${item.count === "unread" ? "unread" : item.count === "recovery" ? "in recovery" : "waiting for you"}`}
                         >
@@ -159,6 +160,7 @@ function UserBlock() {
   return (
     <div className="flex flex-col gap-1 rounded-[3px] bg-surface-2/60 p-2">
       <AvailabilitySwitch user={me.user} />
+      <ThemeSwitch className="mx-1 my-1" />
       <Menu>
         <MenuTrigger className="flex w-full items-center gap-2.5 rounded-[3px] px-2 py-1.5 text-left hover:bg-surface-2" aria-label="Account menu">
           <Avatar name={me.user.name} size={28} />

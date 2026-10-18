@@ -35,9 +35,9 @@ export default function RecoveryPage() {
           </>
         }
       />
-      <dl className="mb-6 grid grid-cols-1 gap-px bg-line sm:grid-cols-3">
+      <dl className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {(Object.keys(RECOVERY) as Reason[]).map((r) => (
-          <div key={r} className="bg-paper p-5">
+          <div key={r} className="rounded-[3px] bg-surface p-5">
             <dt className="text-sm text-ink-soft">{RECOVERY[r].long}</dt>
             <dd className="tabular mt-2 text-4xl font-semibold tracking-[-0.02em] text-ink">{q.data ? counts[r] : "–"}</dd>
           </div>

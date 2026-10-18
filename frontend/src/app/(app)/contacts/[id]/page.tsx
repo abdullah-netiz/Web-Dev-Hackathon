@@ -28,7 +28,7 @@ function Panel({ title, count, action, children, i }: { title: string; count?: n
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.05 + i * 0.05, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      className="bg-paper p-5"
+      className="rounded-[3px] bg-surface p-5"
       aria-label={title}
     >
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -150,7 +150,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
         <ArrowLeftIcon size={14} aria-hidden /> Contacts
       </Link>
 
-      <header className="mt-4 grid gap-6 bg-surface p-6 md:grid-cols-[minmax(0,1fr)_auto] md:p-8">
+      <header className="mt-4 grid gap-6 rounded-[3px] bg-surface p-6 md:grid-cols-[minmax(0,1fr)_auto] md:p-8">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {c.optedOut && <Tag tone="off" shape="cross">Opted out of WhatsApp</Tag>}
@@ -229,13 +229,13 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
         </div>
       </header>
 
-      <div className="mt-px grid gap-px bg-line lg:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Panel i={0} title="Leads" count={leads.length}>
           {leads.length ? (
             <ul className="flex flex-col gap-2">
               {leads.map((l) => (
                 <li key={l.id}>
-                  <Link href={`/leads/${l.id}`} className="block rounded-[3px] bg-surface p-3 hover:bg-surface-2">
+                  <Link href={`/leads/${l.id}`} className="block rounded-[3px] bg-paper p-3 hover:bg-surface-2">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <SourceTag value={l.source} />
                       <LeadStatusTag value={l.status} />
@@ -258,7 +258,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
             <ul className="flex flex-col gap-2">
               {opportunities.map((o) => (
                 <li key={o.id}>
-                  <Link href={`/opportunities/${o.id}`} className="flex items-center justify-between gap-3 rounded-[3px] bg-surface p-3 hover:bg-surface-2">
+                  <Link href={`/opportunities/${o.id}`} className="flex items-center justify-between gap-3 rounded-[3px] bg-paper p-3 hover:bg-surface-2">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-semibold text-ink">{o.name}</span>
                       <span className="block text-[12.5px] text-ink-soft">{o.ownerName}</span>
@@ -280,7 +280,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
             <ul className="flex flex-col gap-2">
               {conversations.map((cv) => (
                 <li key={cv.id}>
-                  <Link href={`/conversations/${cv.id}`} className="block rounded-[3px] bg-surface p-3 hover:bg-surface-2">
+                  <Link href={`/conversations/${cv.id}`} className="block rounded-[3px] bg-paper p-3 hover:bg-surface-2">
                     <p className="text-[12.5px] text-ink-soft">
                       WhatsApp · {cv.assigneeName ?? "Unassigned"} · {timeAgo(cv.lastMessageAt)}
                     </p>
@@ -298,7 +298,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
           {payments.length ? (
             <ul className="flex flex-col gap-2">
               {payments.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 rounded-[3px] bg-surface p-3">
+                <li key={p.id} className="flex items-center justify-between gap-3 rounded-[3px] bg-paper p-3">
                   <span className="min-w-0">
                     <span className="tabular block text-sm font-semibold text-ink">{formatMoney(p.amount, p.currency)}</span>
                     <span className="block truncate text-[12.5px] text-ink-soft">
@@ -318,7 +318,7 @@ export default function ContactPage({ params }: { params: Promise<{ id: string }
           {appointments.length ? (
             <ul className="flex flex-col gap-2">
               {appointments.map((a) => (
-                <li key={a.id} className="rounded-[3px] bg-surface p-3">
+                <li key={a.id} className="rounded-[3px] bg-paper p-3">
                   <p className="tabular text-sm font-semibold text-ink">{formatDateTime(a.startsAt, me.user.timeZone)}</p>
                   <p className="text-[12.5px] text-ink-soft">
                     {a.title} with {a.userName}
