@@ -1,5 +1,7 @@
 # Integration checklist — hand-off for devA
 
+> **Resolved on the `integration` branch (2026-10-18).** Kept as history. Current status: [`self-check.md`](./self-check.md).
+
 > Written 2026-10-18. This is the "what is still pending and exactly what to change" note for integrating the
 > frontend (`origin/taimoor`, devC) with the backend (`origin/backend`, devA) and the third-party providers.
 > Full contract: [`docs/api.md`](./api.md). Requirement IDs: `docs/problem-statement.md`.

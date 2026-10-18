@@ -55,13 +55,15 @@ export class CalendarService {
   }
 
   async handleCallback(code: string | undefined, state: string | undefined, error?: string): Promise<{ redirect: string }> {
-    const settings = `${this.env.APP_URL}/settings/integrations`;
-    if (error || !code || !state) return { redirect: `${settings}?google=denied` };
+    // The frontend result page explains the outcome to the employee (I3.1)
+    const page = `${this.env.APP_URL}/connect/google`;
+    const fail = (reason: string) => ({ redirect: `${page}?status=failed&reason=${encodeURIComponent(reason)}` });
+    if (error || !code || !state) return fail(error === 'access_denied' ? "You declined access on Google's consent screen." : 'Google did not complete the sign-in.');
     const parts = state.split('.');
-    if (parts.length !== 4) return { redirect: `${settings}?google=invalid_state` };
+    if (parts.length !== 4) return fail('The sign-in link was invalid. Start again from your profile.');
     const [userId, workspaceId, exp, signature] = parts;
     const expected = hmacSha256Hex(this.env.APP_ENCRYPTION_KEY, `oauth:${userId}.${workspaceId}.${exp}`);
-    if (!safeEqual(expected, signature) || Number(exp) < Date.now()) return { redirect: `${settings}?google=invalid_state` };
+    if (!safeEqual(expected, signature) || Number(exp) < Date.now()) return fail('The sign-in link expired. Start again from your profile.');
 
     try {
       const { refreshToken, email } = await this.google.exchangeCode(code);
@@ -76,11 +78,11 @@ export class CalendarService {
       });
       await this.events.record({ workspaceId, provider: 'GOOGLE', direction: 'OUT', type: 'oauth.connected', payload: { userId, email } });
       this.realtime.toWorkspace(workspaceId, 'integration:status', { provider: 'GOOGLE', status: 'CONNECTED', userId });
-      return { redirect: `${settings}?google=connected` };
+      return { redirect: `${page}?status=connected` };
     } catch (err) {
       this.logger.warn(`Google OAuth exchange failed: ${(err as Error).message}`);
       await this.events.record({ workspaceId, provider: 'GOOGLE', direction: 'OUT', type: 'oauth.failed', payload: { userId, message: (err as Error).message } });
-      return { redirect: `${settings}?google=failed` };
+      return fail((err as Error).message.slice(0, 200));
     }
   }
 

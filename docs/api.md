@@ -5,7 +5,7 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 ## Conventions
 
 - **Auth**: `Authorization: Bearer <token>` (token from `POST /auth/login` or `/auth/signup`). The server also sets an `sid` cookie for same-origin use. Sessions idle out after 24 h and expire after 7 days.
-- **Success envelope**: `{ "data": ... }`. List endpoints return `{ "data": [...], "meta": { "nextCursor": string|null, "hasMore": boolean, "total"?: number } }`. Pass `?cursor=<nextCursor>&limit=50` (max 100) to page.
+- **Success envelope**: `{ "data": ... }`. List endpoints return `{ "data": [...], "meta": { "nextCursor": string|null, "hasMore": boolean, "total"?: number } }`. Page with `?page=2&limit=25` (numbered tables) or `?cursor=<nextCursor>&limit=50` (infinite lists); `limit` max 100.
 - **Error envelope**: `{ "code": "SOME_CODE", "message": "What went wrong", "action"?: "What to do", "details"?: [{ "path", "message" }] }`. Status codes: 400 validation, 401 not signed in, 403 permission, 404 not found (also for records of other workspaces), 409 conflict / rule violation / version conflict, 422 business rule, 429 throttled, 502 provider failure.
 - **Optimistic concurrency**: editable records carry `version`. Send it in PATCH bodies; a stale version returns `409 VERSION_CONFLICT`.
 - **Permissions**: `GET /meta/permissions` lists keys. Owner and Admin hold every permission. Users hold their role's permissions. `GET /auth/me` returns the effective list.
@@ -20,7 +20,9 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | POST | `/auth/signup` | `{ workspaceName, firstName, lastName, email, password, timeZone? }` → creates workspace + Owner; returns `{ token, expiresAt, user, workspace }` |
 | POST | `/auth/login` | `{ email, password }` → `{ token, expiresAt, user, workspace }`; 5 attempts/min per IP |
 | POST | `/auth/logout` | revokes the current session |
-| GET | `/auth/me` | `{ userId, workspaceId, email, name, baseLevel, roleName, permissions[] }` |
+| GET | `/auth/me` | `{ user, workspace, permissions[], expiresAt }` — `user` has the same shape as `GET /users` items |
+| GET | `/auth/invites/:token` | public: `{ email, firstName, lastName, workspaceName }` for the invite page |
+| POST | `/auth/invites/:token/accept` | public: `{ name?, password }` → same as login; the link works once and expires after 7 days |
 | GET | `/auth/sessions` · DELETE `/auth/sessions/:id` · POST `/auth/sessions/revoke-others` | session management |
 | POST | `/auth/change-password` | `{ currentPassword, newPassword }` (revokes other sessions) |
 | GET | `/auth/ws-token` | `{ token, expiresInSec }` for Socket.IO |
@@ -32,11 +34,12 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/workspace` | any | includes lead-engine settings |
-| PATCH | `/workspace` | `settings.manage` | `{ name?, currency?, timeZone?, ackWindowSec?, escalationLevels?, levelWindowSec?, idleSec?, maxOpenLeadsDefault?, acknowledgedLeadsOnAbsence? }` (seconds) |
-| GET | `/users?includeInactive=` | any | each user: `baseLevel, role, availability, maxOpenLeads, backupUserId, isManager, slackLinked, slackUserId, version` |
-| POST | `/users` | `users.manage` | `{ email, firstName, lastName, baseLevel?: 'ADMIN'\|'USER', roleId?, timeZone? }` → `{ user, temporaryPassword }` (show once) |
+| PATCH | `/workspace` | timers: `leads.manage_rules`; name/currency/time zone: `settings.manage` | `{ name?, currency?, timeZone?, ackWindowSec?, escalationLevels?, levelWindowSec?, idleSec?, maxOpenLeadsDefault?, acknowledgedLeadsOnAbsence? }` (seconds) |
+| GET | `/users?includeInactive=` | any | each user: `baseLevel, role, roleName, availability, maxOpenLeads, backupUserId, isManager, isEscalationManager, openLeadCount, calendarStatus, slackLinked, slackUserId, invitePending, isActive, version` |
+| POST | `/users` | `users.manage` | `{ email, firstName, lastName, baseLevel?: 'ADMIN'\|'USER', roleId?, timeZone? }` → `{ user, inviteUrl }` (one-time link, 7 days) |
+| POST | `/users/:id/reactivate` | `users.manage` | undo a deactivation |
 | GET | `/users/:id` | any | |
-| PATCH | `/users/:id` (or `me`) | self for profile; `users.manage` for role/level/limits | `{ firstName?, lastName?, baseLevel?, roleId?, maxOpenLeads?, backupUserId?, timeZone?, version? }`; Admin cannot modify Owner; only Owner grants Admin |
+| PATCH | `/users/:id` (or `me`) | self for profile; `users.manage` for role/level/limits | `{ firstName?, lastName?, baseLevel?, roleId?, maxOpenLeads?, backupUserId?, isEscalationManager?, timeZone?, version? }`; Admin cannot modify Owner; only Owner grants Admin |
 | PATCH | `/users/:id/availability` (or `me`) | self or `users.manage` | `{ availability: 'AVAILABLE'\|'BUSY'\|'ON_LEAVE'\|'OFFLINE' }`; ON_LEAVE/OFFLINE reassigns pending leads |
 | DELETE | `/users/:id` | `users.manage` | deactivates; pending leads reassigned |
 | GET | `/roles` | any | `{ id, name, description, permissions[], isSystem, userCount, isManager }` |
@@ -47,13 +50,14 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/companies` · `/companies/:id` | `crm.view` | detail includes contacts + opportunities |
-| POST | `/companies` | `crm.create` | `{ name, domain?, ownerId?, custom? }` |
+| POST | `/companies` | `crm.create` | `{ name, domain?, industry?, city?, ownerId?, custom? }`; list items carry `_count.contacts` and `_count.opportunities` (open only) |
 | PATCH | `/companies/:id` · DELETE | `crm.edit` / `crm.delete` | |
 | GET | `/contacts` | `crm.view` | paginated, filters, `total` |
 | GET | `/contacts/:id` | `crm.view` | |
 | GET | `/contacts/:id/overview` | `crm.view` | `{ contact, opportunities, leads, conversations, payments, appointments, timeline }` (F2.8) |
 | GET | `/contacts/:id/activities` | `crm.view` | combined timeline, paginated |
 | GET | `/contacts/export.csv?filters=` | `crm.view`+`crm.export` | CSV; value permission applied |
+| GET | `/contacts/tags` | `crm.view` | every tag in use |
 | POST | `/contacts` | `crm.create` | `{ firstName, lastName?, email?, phone? (E.164), companyId?, ownerId?, tags?, custom? }`; phone unique per workspace |
 | PATCH | `/contacts/:id` | `crm.edit` | also `optedOut`; `version` |
 | DELETE | `/contacts/:id` | `crm.delete` | refused (409) while related records exist |
@@ -63,7 +67,7 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | GET | `/opportunities/:id/activities` · `/opportunities/export.csv` | | |
 | POST | `/opportunities` | `crm.create` | `{ name, contactId, companyId?, pipelineId?, stageId?, ownerId?, value?, currency?, closeDate?, custom? }` |
 | PATCH | `/opportunities/:id` | `crm.edit` | editing `value` also needs `crm.view_values` |
-| POST | `/opportunities/:id/move` | `crm.edit` | `{ stageId, version? }`; `422 STAGE_REQUIREMENTS_UNMET` lists missing fields |
+| POST | `/opportunities/:id/move` | `crm.edit` | `{ stageId, version? }`; `422 REQUIRED_FIELDS_MISSING` with `details.missing` (field keys) |
 | DELETE | `/opportunities/:id` | `crm.delete` | refused while payments exist |
 | POST | `/:entity/:id/notes` | `crm.edit` | entity ∈ `contacts, companies, opportunities, leads`; `{ body }`; a note on a lead by its assignee acknowledges it |
 | GET | `/custom-fields?entity=&includeArchived=` | `crm.view` | |
@@ -71,6 +75,7 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | PATCH | `/custom-fields/:id` · DELETE (archive) | `settings.manage` | |
 | GET | `/pipelines` | `crm.view` | stages ordered, with opportunity counts |
 | POST | `/pipelines` | `settings.manage` | `{ name, stages?: string[] }` |
+| PATCH | `/pipelines/:id` | `settings.manage` | `{ name }` (rename) |
 | POST | `/pipelines/:id/stages` | `settings.manage` | `{ name, isWon?, isLost?, requiredFieldKeys?, color? }` |
 | PUT | `/pipelines/:id/stages/order` | `settings.manage` | `{ stageIds: [...] }` full ordered list |
 | PATCH | `/stages/:id` | `settings.manage` | |
@@ -83,7 +88,8 @@ Base URL: `http://localhost:4000` locally. All request and response bodies are J
 | Method | Path | Permission | Notes |
 |---|---|---|---|
 | GET | `/f/:workspaceSlug` | public | HTML intake form |
-| POST | `/intake/:workspaceSlug` | public, 10/min | `{ firstName, lastName?, email?, phone?, message }` → `{ reference, leadId }` |
+| GET | `/public/workspaces/:slug` | public | `{ name, slug, timeZone }` for the form header |
+| POST | `/intake/:workspaceSlug` | public, 10/min | `{ firstName, lastName?, email?, phone?, message, company?, website? }` → `{ reference, leadId }`; `website` is a honeypot (filled = silently dropped) |
 | GET | `/leads?status=&mine=&filters=` | any | Users without `leads.view_all` see only their own |
 | GET | `/leads/recovery` | any | recovery queue; `meta.byReason` counts (`OVERDUE, ESCALATED_TWICE, IDLE`) |
 | GET | `/leads/:id` | any (own or `leads.view_all`) | includes `assignments[]`, `remainingSec`, `dueAt`, `recoveryReason`, `timeToFirstResponseSec` |
@@ -97,12 +103,12 @@ Lead status: `NEW → ASSIGNED → ACKNOWLEDGED → CLOSED`. `dueAt` is the ackn
 
 ## Dashboard (F5)
 
-- `GET /dashboard` → `{ scope: 'company'|'personal', widgets: { newLeadsToday, openPipelineValueByStage, avgTimeToFirstResponseSec, recoveryQueueCount, escalationsLast24h, employeeAvailability, upcomingAppointments, paymentsReceivedThisMonth, projectedRevenue }, hiddenWidgets[], availableWidgets[] }`. Each widget has `value` and `drillDown: { endpoint, query }` to pass to the matching list endpoint.
+- `GET /dashboard` → `{ scope: 'company'|'personal', responseTrend: [{ day, leads, avgSec }] (7 days), widgets: { newLeadsToday, openPipelineValueByStage, avgTimeToFirstResponseSec, recoveryQueueCount, escalationsLast24h, employeeAvailability, upcomingAppointments, paymentsReceivedThisMonth, projectedRevenue }, hiddenWidgets[], availableWidgets[] }`. Each widget has `value` and `drillDown: { endpoint, query }` to pass to the matching list endpoint.
 - `PUT /dashboard/prefs` `{ hiddenWidgets: string[] }`.
 
 ## Audit (F4)
 
-- `GET /audit?action=&actorId=&targetType=&from=&to=` (`audit.view`) — paginated; `GET /audit/actions` for the filter list. No write endpoints exist.
+- `GET /audit?action=&actorId=&targetType=&from=&to=` (`audit.view`) — paginated with `total`; `action` takes a comma-separated list of actions or prefixes (e.g. `role.,user.privileges_updated`); `GET /audit/actions` for the filter list. No write endpoints exist.
 
 ## Messaging (I1)
 
@@ -120,6 +126,7 @@ Lead status: `NEW → ASSIGNED → ACKNOWLEDGED → CLOSED`. `dueAt` is the ackn
 
 - `POST /opportunities/:id/payment-requests` `{ amount, currency?, description?, expiresInMinutes? }` (`crm.edit`) → payment with `checkoutUrl` to send to the customer.
 - `GET /payments?status=&from=&to=&opportunityId=` · `GET /payments/:id`. Status (`PENDING, PAID, EXPIRED, FAILED, REFUNDED, PARTIALLY_REFUNDED`) changes only through Lemon Squeezy webhooks (plus `EXPIRED` when an unpaid link passes its deadline); listen to `payment:updated`. Amounts are in the store currency; sending a different `currency` returns `422 CURRENCY_MISMATCH`.
+- `GET /public/payments/:id` (public) → `{ status, amount, currency, workspaceName }` for the return page (`APP_URL/pay/success?payment=<id>`).
 - Lemon Squeezy test card: `4242 4242 4242 4242`, any future date, any CVC.
 
 ## Calendar (I3)
@@ -145,6 +152,7 @@ Lead status: `NEW → ASSIGNED → ACKNOWLEDGED → CLOSED`. `dueAt` is the ackn
 | GET | `/integrations` | per provider: `status, lastOkAt, lastError, maskedCredentials, limits[], purpose, webhookUrl, statusCallbackUrl, details` |
 | PUT | `/integrations/:provider` | `twilio`: `{ credentials: { accountSid, authToken, whatsappFrom } }`; `lemonsqueezy`: `{ credentials: { apiKey, storeId, variantId, webhookSecret }, config: { currency: "USD" } }`; `slack`: `{ credentials: { botToken } }` (`integrations.manage`) |
 | DELETE | `/integrations/:provider` | disconnect |
+| POST | `/integrations/:provider/test` | `integrations.view`; one harmless call with the stored credentials → `{ ok, detail }` (provider's own error in plain words) |
 | GET | `/integrations/events?provider=&status=` | sync history (`integrations.view`) |
 
 Webhook URLs to register with providers (shown on `GET /integrations`): Twilio `POST {PUBLIC_URL}/webhooks/twilio/{workspaceId}` and status callback `.../status`; Lemon Squeezy `POST {PUBLIC_URL}/webhooks/lemonsqueezy/{workspaceId}` (events `order_created`, `order_refunded`). Slack and Google need no webhook.

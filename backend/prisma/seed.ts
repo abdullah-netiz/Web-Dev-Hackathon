@@ -121,6 +121,46 @@ async function main() {
     });
   }
 
+  // A second pipeline with its own field set, sharing the same contacts (F2.3)
+  let solar = await prisma.pipeline.findFirst({ where: { workspaceId: workspace.id, name: 'Solar installations' }, include: { stages: { orderBy: { order: 'asc' } } } });
+  if (!solar) {
+    const created = await prisma.pipeline.create({ data: { workspaceId: workspace.id, name: 'Solar installations' } });
+    const stages: [string, boolean, boolean][] = [['Site survey', false, false], ['Quote sent', false, false], ['Installation booked', false, false], ['Installed', true, false], ['Lost', false, true]];
+    await prisma.pipelineStage.createMany({ data: stages.map(([name, isWon, isLost], order) => ({ workspaceId: workspace.id, pipelineId: created.id, name, order, isWon, isLost })) });
+    solar = await prisma.pipeline.findFirstOrThrow({ where: { id: created.id }, include: { stages: { orderBy: { order: 'asc' } } } });
+  }
+  const solarFields = [
+    { key: 'system_size_kw', label: 'System size (kW)', type: 'NUMBER' as const, options: [] as string[] },
+    { key: 'roof_type', label: 'Roof type', type: 'DROPDOWN' as const, options: ['Flat', 'Pitched', 'Metal'] },
+  ];
+  for (const [order, field] of solarFields.entries()) {
+    await prisma.customFieldDefinition.upsert({
+      where: { workspaceId_entity_key: { workspaceId: workspace.id, entity: 'OPPORTUNITY', key: field.key } },
+      create: { workspaceId: workspace.id, entity: 'OPPORTUNITY', pipelineId: solar.id, ...field, order: 10 + order },
+      update: { pipelineId: solar.id, options: field.options, isArchived: false },
+    });
+  }
+  await prisma.pipelineStage.updateMany({ where: { pipelineId: solar.id, name: 'Quote sent' }, data: { requiredFieldKeys: ['system_size_kw'] } });
+  if ((await prisma.opportunity.count({ where: { pipelineId: solar.id } })) === 0) {
+    for (let i = 0; i < 12; i += 1) {
+      const contact = await prisma.contact.findUniqueOrThrow({ where: { id: contactIds[(i * 11 + 5) % contactIds.length] } });
+      await prisma.opportunity.create({
+        data: {
+          workspaceId: workspace.id,
+          name: `${contact.firstName} ${contact.lastName} — rooftop solar`,
+          contactId: contact.id,
+          companyId: contact.companyId,
+          pipelineId: solar.id,
+          stageId: solar.stages[i % 3]!.id,
+          ownerId: owners[i % owners.length],
+          value: 3500 + i * 450,
+          currency: 'USD',
+          custom: i % 3 === 0 ? { roof_type: 'Pitched' } : { system_size_kw: 5 + (i % 6), roof_type: ['Flat', 'Pitched', 'Metal'][i % 3] },
+        },
+      });
+    }
+  }
+
   console.log(`Seeded workspace "${workspace.name}" (slug: demo)`);
   console.log(`Users (password for all: ${PASSWORD}):`);
   for (const user of users) console.log(`  ${user.email}  ${user.baseLevel}${user.roleId ? ` / ${Object.entries(roles).find(([, id]) => id === user.roleId)?.[0]}` : ''}`);
